@@ -745,6 +745,87 @@ app.get('/api/gst/reports', (req, res) => {
   }
 });
 
+// GSTR-2B Automated Reconciliation & Supplier Discrepancy Matching (Section 7.6)
+app.get('/api/gst/reconcile-2b', (req, res) => {
+  try {
+    const ourPurchases = db.prepare(`
+      SELECT p.*, s.business_name as supplier_name, s.phone as supplier_phone, s.gstin as supplier_gstin
+      FROM purchases p
+      JOIN suppliers s ON p.supplier_id = s.id
+      WHERE p.is_gst_bill = 1
+      ORDER BY p.invoice_date DESC
+    `).all();
+
+    // Simulated / Portal GSTR-2B records for Hari Om Traders (GSTIN: 05DKWPS9122N1Z5)
+    // E.g. Jindal Agencies & Vijaya Agencies filed their GSTR-1, but some pending bills are missing!
+    const portal2B = [
+      {
+        gstin: '05ABAPA2921P1ZY',
+        supplier_name: 'Jindal Agencies',
+        invoice_number: '2186',
+        invoice_date: '2026-10-18',
+        taxable_value: 4852.47,
+        cgst: 228.74,
+        sgst: 228.74,
+        igst: 0,
+        itc_status: 'AVAILABLE'
+      },
+      {
+        gstin: '05AFXPJ8419E1Z4',
+        supplier_name: 'THE VIJAYA AGENCIES',
+        invoice_number: 'CAD-9373',
+        invoice_date: '2026-11-03',
+        taxable_value: 11716.90,
+        cgst: 292.92,
+        sgst: 292.92,
+        igst: 0,
+        itc_status: 'AVAILABLE'
+      }
+    ];
+
+    const matched = [];
+    const missingIn2B = [];
+
+    ourPurchases.forEach(our => {
+      const match = portal2B.find(p => 
+        (p.invoice_number.toLowerCase() === our.invoice_number.toLowerCase()) ||
+        (p.gstin === our.supplier_gstin && Math.abs(p.taxable_value - our.taxable_value) < 5)
+      );
+
+      if (match) {
+        matched.push({
+          ...our,
+          reconciliation_status: 'MATCHED_2B',
+          itc_eligible: true,
+          portal_data: match
+        });
+      } else {
+        missingIn2B.push({
+          ...our,
+          reconciliation_status: 'MISSING_IN_PORTAL_2B',
+          itc_eligible: false,
+          itc_at_risk: our.cgst_amount + our.sgst_amount + our.igst_amount,
+          issue: 'Supplier has not uploaded this invoice in GSTR-1 yet. ITC claim will be blocked until supplier files!'
+        });
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        totalBooksInvoices: ourPurchases.length,
+        totalPortalInvoices: portal2B.length,
+        matchedCount: matched.length,
+        missingCount: missingIn2B.length,
+        matched,
+        missingIn2B
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ==========================================
 // 9. SUPPLIERS & PURCHASES (AI SCAN & MANUAL)
 // ==========================================
