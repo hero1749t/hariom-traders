@@ -1,0 +1,22 @@
+{
+  "name": "Hari Om Traders - Shop Management System",
+  "short_name": "Hari Om OS",
+  "description": "Mobile-First GST & Shop Operations System for Hari Om Traders",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#065f46",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
