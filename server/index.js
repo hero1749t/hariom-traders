@@ -844,16 +844,120 @@ app.get('/api/suppliers', (req, res) => {
   }
 });
 
-app.get('/api/purchases', (req, res) => {
+// View Single Purchase Invoice with Items
+app.get('/api/purchases/:id', (req, res) => {
   try {
-    const purchases = db.prepare(`
-      SELECT p.*, s.business_name as supplier_name, s.phone as supplier_phone
+    const purchase = db.prepare(`
+      SELECT p.*, s.business_name as supplier_name, s.phone as supplier_phone, s.gstin as supplier_gstin
       FROM purchases p
       JOIN suppliers s ON p.supplier_id = s.id
-      ORDER BY p.invoice_date DESC, p.created_at DESC
-    `).all();
-    res.json({ success: true, data: purchases });
+      WHERE p.id = ?
+    `).get(req.params.id);
+
+    if (!purchase) return res.status(404).json({ success: false, message: 'Invoice not found' });
+
+    const items = db.prepare(`
+      SELECT pi.*, p.name as product_name, l.name as location_name, r.rack_code
+      FROM purchase_items pi
+      LEFT JOIN products p ON pi.product_id = p.id
+      LEFT JOIN locations l ON pi.destination_location_id = l.id
+      LEFT JOIN racks r ON pi.destination_rack_id = r.id
+      WHERE pi.purchase_id = ?
+    `).all(req.params.id);
+
+    res.json({ success: true, data: { ...purchase, items } });
   } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Update / Edit Purchase Invoice
+app.put('/api/purchases/:id', (req, res) => {
+  const { invoice_number, invoice_date, grand_total, taxable_value, cgst_amount, sgst_amount, payment_status, verified_by } = req.body;
+  try {
+    db.prepare(`
+      UPDATE purchases 
+      SET invoice_number = COALESCE(?, invoice_number),
+          invoice_date = COALESCE(?, invoice_date),
+          grand_total = COALESCE(?, grand_total),
+          taxable_value = COALESCE(?, taxable_value),
+          cgst_amount = COALESCE(?, cgst_amount),
+          sgst_amount = COALESCE(?, sgst_amount),
+          payment_status = COALESCE(?, payment_status)
+      WHERE id = ?
+    `).run(invoice_number, invoice_date, grand_total, taxable_value, cgst_amount, sgst_amount, payment_status, req.params.id);
+
+    logAudit(verified_by || 'Owner', 'EDIT_PURCHASE', 'PURCHASES', `Edited invoice ${invoice_number || req.params.id}`);
+    res.json({ success: true, message: 'Invoice updated successfully!' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Delete Purchase Invoice
+app.delete('/api/purchases/:id', (req, res) => {
+  try {
+    const purchase = db.prepare('SELECT * FROM purchases WHERE id = ?').get(req.params.id);
+    if (!purchase) return res.status(404).json({ success: false, message: 'Invoice not found' });
+
+    // Remove purchase items and batches associated with this invoice ref
+    db.prepare('DELETE FROM inventory_batches WHERE purchase_invoice_ref = ?').run(purchase.invoice_number);
+    db.prepare('DELETE FROM purchases WHERE id = ?').run(req.params.id);
+
+    logAudit('Owner', 'DELETE_PURCHASE', 'PURCHASES', `Deleted invoice ${purchase.invoice_number}`);
+    res.json({ success: true, message: 'Invoice and associated batches deleted!' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Wipe All Fake / Demo Data (Keep Clean Slate for Real Data Entry)
+app.post('/api/admin/reset-database', (req, res) => {
+  try {
+    const resetTx = db.transaction(() => {
+      // Child tables first to satisfy foreign key constraints
+      db.prepare('DELETE FROM sale_items').run();
+      db.prepare('DELETE FROM sales').run();
+      db.prepare('DELETE FROM purchase_items').run();
+      db.prepare('DELETE FROM purchases').run();
+      db.prepare('DELETE FROM expiry_returns').run();
+      db.prepare('DELETE FROM stock_movements').run();
+      db.prepare('DELETE FROM inventory_batches').run();
+      db.prepare('DELETE FROM products').run();
+      db.prepare('DELETE FROM tasks').run();
+
+      // Reset suppliers to the real ones from user's bills
+      db.prepare('DELETE FROM suppliers').run();
+      const insertSup = db.prepare(`
+        INSERT INTO suppliers (id, name, business_name, gstin, phone, address, return_policy, return_deadline_days, credit_terms_days)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      insertSup.run(
+        'sup-krishna', 'Rishabh / Krishna Rep', 'KRISHNA AGENCIES 26-27', '05AEJPC9715K1ZD',
+        '+91 70171 68755', 'Plot No-2, Sector-1, Industrial Area, Muni Ki Reti, Rishikesh',
+        'Standard confectionery & FMCG credit note policy', 30, 21
+      );
+
+      insertSup.run(
+        'sup-vijaya', 'Rishabh Agency Contact', 'THE VIJAYA AGENCIES', '05AFXPJ8419E1Z4',
+        '+91 97600 26617', '145/1 Laxman Jhula Road, Rishikesh',
+        'Cadbury & personal care replacement on quarterly representative visit', 45, 30
+      );
+
+      insertSup.run(
+        'sup-jindal', 'Jindal Representative', 'Jindal Agencies', '05ABAPA2921P1ZY',
+        '+91 98972 10140', 'Saklani Complex, Railway Road, Rishikesh',
+        'Full credit note provided for spices & detergents returned prior to expiry', 30, 15
+      );
+
+      logAudit('Owner', 'RESET_SYSTEM', 'ADMIN', 'Cleared all demo/fake data. Prepared clean slate for real shop bills.');
+    });
+
+    resetTx();
+    res.json({ success: true, message: 'All fake data cleared! System is now completely fresh for real data entry.' });
+  } catch (err) {
+    db.pragma('foreign_keys = ON');
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -957,8 +1061,25 @@ app.post('/api/purchases/confirm', (req, res) => {
       const piId = `pi_${Date.now()}_${idx}`;
       const batchId = `b_inw_${Date.now()}_${idx}`;
 
+      // Auto create or resolve product in master
+      let productId = item.matched_product_id;
+      if (!productId) {
+        const existingProd = db.prepare('SELECT id FROM products WHERE name = ?').get(item.product_name);
+        if (existingProd) {
+          productId = existingProd.id;
+        } else {
+          productId = `prod_${Date.now()}_${idx}`;
+          const sellingPrice = Number((item.rate * 1.15).toFixed(2));
+          const mrp = Number((item.rate * 1.25).toFixed(2));
+          db.prepare(`
+            INSERT INTO products (id, name, category, hsn_code, base_unit, purchase_price, selling_price, mrp, gst_rate, preferred_supplier_id, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+          `).run(productId, item.product_name, 'Groceries', item.hsn_code || '2106', item.unit || 'UNIT', item.rate, sellingPrice, mrp, item.gst_rate || 5, supplier.id);
+        }
+      }
+
       insertPurchItem.run(
-        piId, purchaseId, item.matched_product_id, item.batch_number, item.expiry_date || null,
+        piId, purchaseId, productId, item.batch_number || `BATCH-${Date.now().toString().slice(-4)}`, item.expiry_date || null,
         item.quantity, item.unit || 'UNIT', item.rate, item.taxable_value, item.gst_rate,
         item.cgst || 0, item.sgst || 0, item.igst || 0, item.total_amount,
         item.destination_location_id || 'loc-godown', item.destination_rack_id || null, item.destination_section_id || null
@@ -966,14 +1087,14 @@ app.post('/api/purchases/confirm', (req, res) => {
 
       // Create new batch in inventory
       insertBatch.run(
-        batchId, item.matched_product_id, supplier.id, item.batch_number,
+        batchId, productId, supplier.id, item.batch_number || `BATCH-${Date.now().toString().slice(-4)}`,
         item.destination_location_id || 'loc-godown', item.destination_rack_id || null, item.destination_section_id || null,
         invoice_date, item.expiry_date || null, invoice_number, item.rate, item.quantity, item.quantity
       );
 
       // Log movement
       insertMovement.run(
-        `mov_inw_${Date.now()}_${idx}`, batchId, item.matched_product_id,
+        `mov_inw_${Date.now()}_${idx}`, batchId, productId,
         item.destination_location_id || 'loc-godown', item.quantity, item.unit || 'UNIT',
         invoice_number, `Purchase inward from ${supplier.business_name}`, verified_by || 'Owner'
       );

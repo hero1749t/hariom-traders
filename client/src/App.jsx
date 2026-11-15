@@ -5,7 +5,7 @@ import {
   FileText, CheckSquare, Users, Search, Plus, Trash2, Printer, 
   RefreshCw, CheckCircle2, Phone, MapPin, ShieldCheck, ChevronRight,
   TrendingUp, IndianRupee, Layers, Clock, AlertCircle, Barcode, Calendar,
-  Camera, UploadCloud, FileCheck, Check, Sparkles
+  Camera, UploadCloud, FileCheck, Check, Sparkles, Eye, Edit, X
 } from 'lucide-react';
 
 export default function App() {
@@ -45,6 +45,10 @@ export default function App() {
   const [transferQty, setTransferQty] = useState(1);
   const [transferToLoc, setTransferToLoc] = useState('loc-main');
 
+  // Invoice Management Modals
+  const [viewInvoice, setViewInvoice] = useState(null);
+  const [editInvoice, setEditInvoice] = useState(null);
+
   // Search & Filter States
   const [inventoryLocationFilter, setInventoryLocationFilter] = useState('ALL');
   const [productSearch, setProductSearch] = useState('');
@@ -75,64 +79,112 @@ export default function App() {
       setPurchasesHistory(purchRes.data.data || []);
     } catch (err) {
       console.warn('API connection failed, activating offline/cloud standalone mode with initial shop data:', err);
-      // Fallback initial data so Vercel / remote mobile dashboard is NEVER blank!
+      // Clean Real Data from User's Actual Invoices (Jindal Agencies, The Vijaya Agencies, Krishna Agencies)
       setDashboard({
-        totalProducts: 10,
-        totalQuantity: 215,
-        purchaseValuation: 19942.00,
-        sellingValuation: 23666.00,
-        mrpValuation: 25368.00,
+        totalProducts: 9,
+        totalQuantity: 88,
+        purchaseValuation: 22253.23,
+        sellingValuation: 25591.28,
+        mrpValuation: 27816.50,
         locationBreakdown: [
-          { id: 'loc-godown', name: 'Back Godown', type: 'BACK_GODOWN', unique_products: 4, total_units: 112, inventory_value: 10892.00 },
-          { id: 'loc-main', name: 'Main Shop', type: 'MAIN_SHOP', unique_products: 7, total_units: 94, inventory_value: 8422.00 },
-          { id: 'loc-second', name: 'Second Shop', type: 'SECOND_SHOP', unique_products: 2, total_units: 9, inventory_value: 628.00 }
+          { id: 'loc-godown', name: 'Back Godown', type: 'BACK_GODOWN', unique_products: 2, total_units: 9, inventory_value: 9802.18 },
+          { id: 'loc-main', name: 'Main Shop', type: 'MAIN_SHOP', unique_products: 7, total_units: 79, inventory_value: 12451.05 },
+          { id: 'loc-second', name: 'Second Shop', type: 'SECOND_SHOP', unique_products: 0, total_units: 0, inventory_value: 0.00 }
         ],
         alerts: {
-          expiredCount: 1,
-          nearExpiryCount: 1,
-          lowStockCount: 7,
-          lowStockItems: [
-            { id: 'prod-1', name: 'Tata Salt Vacuum Evaporated 1kg', min_stock_level: 20, reorder_point: 35, shop_stock: 18, godown_stock: 48 },
-            { id: 'prod-2', name: 'Fortune Sunlite Refined Sunflower Oil 1L', min_stock_level: 15, reorder_point: 25, shop_stock: 8, godown_stock: 24 },
-            { id: 'prod-3', name: 'Aashirvaad Shudh Chakki Atta 5kg', min_stock_level: 10, reorder_point: 18, shop_stock: 6, godown_stock: 20 }
-          ],
-          pendingTasks: 2
+          expiredCount: 0,
+          nearExpiryCount: 0,
+          lowStockCount: 0,
+          lowStockItems: [],
+          pendingTasks: 0
         },
-        today: { bills_count: 1, total_sales: 52.00, cash_total: 0, upi_total: 52.00 }
+        today: { bills_count: 0, total_sales: 0.00, cash_total: 0, upi_total: 0.00 }
       });
       setProducts([
-        { id: 'prod-1', name: 'Tata Salt Vacuum Evaporated 1kg', category: 'Groceries', barcode: '8901030383794', base_unit: 'PKT', selling_price: 26, mrp: 28, gst_rate: 5, total_stock: 64, main_shop_stock: 16, godown_stock: 48 },
-        { id: 'prod-2', name: 'Fortune Sunlite Refined Sunflower Oil 1L', category: 'Oils & Ghee', barcode: '8906007280053', base_unit: 'POUCH', selling_price: 135, mrp: 145, gst_rate: 5, total_stock: 32, main_shop_stock: 8, godown_stock: 24 },
-        { id: 'prod-3', name: 'Aashirvaad Shudh Chakki Atta 5kg', category: 'Groceries', barcode: '8901058852326', base_unit: 'BAG', selling_price: 245, mrp: 260, gst_rate: 0, total_stock: 26, main_shop_stock: 6, godown_stock: 20 },
-        { id: 'prod-4', name: 'MDH Deggi Mirch Powder 100g', category: 'Spices & Masala', barcode: '8901967200119', base_unit: 'BOX', selling_price: 82, mrp: 90, gst_rate: 5, total_stock: 30, main_shop_stock: 25, godown_stock: 0 },
-        { id: 'prod-5', name: 'Everest Garam Masala 100g', category: 'Spices & Masala', barcode: '8901786111025', base_unit: 'BOX', selling_price: 88, mrp: 95, gst_rate: 5, total_stock: 20, main_shop_stock: 16, godown_stock: 0 }
+        { id: 'prod-1', name: 'MDH Kashmiri Mirch Powder 100g', category: 'Spices & Masala', barcode: '8901967200119', base_unit: 'UNIT', selling_price: 153.33, mrp: 166.66, gst_rate: 5, total_stock: 5, main_shop_stock: 5, godown_stock: 0 },
+        { id: 'prod-2', name: 'Kitchen King Masala 100g', category: 'Spices & Masala', barcode: '8901967200225', base_unit: 'UNIT', selling_price: 153.33, mrp: 166.66, gst_rate: 5, total_stock: 2, main_shop_stock: 2, godown_stock: 0 },
+        { id: 'prod-3', name: 'Double Engine Detergent Powder 1kg', category: 'Cleaning & Detergents', barcode: '8906001230012', base_unit: 'BAG', selling_price: 1900.42, mrp: 2065.00, gst_rate: 18, total_stock: 1, main_shop_stock: 0, godown_stock: 1 },
+        { id: 'prod-4', name: 'Cadbury Dairy Milk Chocolate ₹10', category: 'Confectionery', barcode: '7622201140023', base_unit: 'BOX', selling_price: 557.49, mrp: 605.96, gst_rate: 5, total_stock: 6, main_shop_stock: 6, godown_stock: 0 },
+        { id: 'prod-5', name: 'Cadbury Dairy Milk Chocolate ₹45', category: 'Confectionery', barcode: '7622201140047', base_unit: 'BOX', selling_price: 1320.17, mrp: 1434.96, gst_rate: 5, total_stock: 4, main_shop_stock: 4, godown_stock: 0 },
+        { id: 'prod-6', name: 'Oreo Choco Cream Biscuit ₹10', category: 'Biscuits', barcode: '7622201140085', base_unit: 'PCS', selling_price: 9.96, mrp: 10.82, gst_rate: 5, total_stock: 60, main_shop_stock: 60, godown_stock: 0 },
+        { id: 'prod-7', name: 'Hridayram Kaju Patishta 400g (Box)', category: 'Sweets & Festive', barcode: '8906002340011', base_unit: 'CASE', selling_price: 2519.05, mrp: 2738.10, gst_rate: 5, total_stock: 1, main_shop_stock: 1, godown_stock: 0 },
+        { id: 'prod-8', name: 'Hridayram Gulab Jamun 1kg (12 Box)', category: 'Sweets & Festive', barcode: '8906002340028', base_unit: 'CASE', selling_price: 1840.00, mrp: 2000.00, gst_rate: 5, total_stock: 1, main_shop_stock: 1, godown_stock: 0 },
+        { id: 'prod-9', name: 'HR Kachri Scheme Big (8 Bags)', category: 'Snacks & Namkeen', barcode: '8906002340035', base_unit: 'BAG', selling_price: 1129.41, mrp: 1227.62, gst_rate: 5, total_stock: 8, main_shop_stock: 0, godown_stock: 8 }
       ]);
       setLocations([
-        { id: 'loc-main', name: 'Main Shop', type: 'MAIN_SHOP', racks: Array.from({ length: 12 }, (_, i) => ({ id: `r-${i+1}`, rack_code: `Rack 0${i+1}`, description: `Main Aisle ${i+1}`, sections: [{ id: `s-${i+1}-1`, section_code: 'Section A', description: 'Shelf 1' }] })) },
-        { id: 'loc-second', name: 'Second Shop', type: 'SECOND_SHOP', racks: [{ id: 'rs-1', rack_code: 'Sec-Rack 1', description: 'Expiry Buffer', sections: [{ id: 'ss-1', section_code: 'Top Shelf', description: 'Level 1' }] }] },
-        { id: 'loc-godown', name: 'Back Godown', type: 'BACK_GODOWN', racks: [{ id: 'rg-1', rack_code: 'Stack 1', description: 'Bulk Pallet Stack', sections: [{ id: 'sg-1', section_code: 'Base Pallet', description: 'Ground' }] }] }
+        { id: 'loc-main', name: 'Main Shop', type: 'MAIN_SHOP', racks: Array.from({ length: 6 }, (_, i) => ({ id: `r-${i+1}`, rack_code: `Rack 0${i+1}`, description: `Aisle ${i+1}`, sections: [{ id: `s-${i+1}-1`, section_code: 'Section A', description: 'Shelf 1' }] })) },
+        { id: 'loc-second', name: 'Second Shop', type: 'SECOND_SHOP', racks: [{ id: 'rs-1', rack_code: 'Sec-Rack 1', description: 'Display Counter', sections: [{ id: 'ss-1', section_code: 'Top Shelf', description: 'Level 1' }] }] },
+        { id: 'loc-godown', name: 'Back Godown', type: 'BACK_GODOWN', racks: [{ id: 'rg-1', rack_code: 'Pallet Stack 1', description: 'Bulk Pallet Stack', sections: [{ id: 'sg-1', section_code: 'Ground Area', description: 'Ground' }] }] }
       ]);
-      setExpiryAlerts([
-        { batch_id: 'b-7', product_name: 'MDH Deggi Mirch Powder 100g', batch_number: 'MDH-DM-EXP12', expiry_date: '2026-11-27', quantity_remaining: 5, purchase_price: 68, urgency: 'EXPIRING_15_DAYS', location_name: 'Second Shop', rack_code: 'Sec-Rack 1', supplier_name: 'Sharma Spices & Provisions', supplier_phone: '+91 98731 44552', return_policy: 'Return acceptable 30 days prior', return_deadline_days: 30 },
-        { batch_id: 'b-9', product_name: 'Everest Garam Masala 100g', batch_number: 'EVR-GM-OLD', expiry_date: '2026-11-10', quantity_remaining: 4, purchase_price: 72, urgency: 'EXPIRED', location_name: 'Second Shop', rack_code: 'Sec-Rack 2', supplier_name: 'Sharma Spices & Provisions', supplier_phone: '+91 98731 44552', return_policy: 'Return acceptable with seal intact', return_deadline_days: 30 }
-      ]);
-      setReorders([
-        { id: 'prod-2', name: 'Fortune Sunlite Refined Sunflower Oil 1L', action: 'TRANSFER_FROM_GODOWN', suggestedQuantity: 12, reason: 'Shop has only 8 pouches, but Godown has 24. Shift stock!', priority: 'HIGH', main_shop_stock: 8, godown_stock: 24, reorder_point: 25, base_unit: 'POUCH' },
-        { id: 'prod-4', name: 'MDH Deggi Mirch Powder 100g', action: 'REORDER_FROM_SUPPLIER', suggestedQuantity: 20, reason: 'Total stock below reorder point. Order from Sharma Spices.', priority: 'HIGH', main_shop_stock: 25, godown_stock: 0, reorder_point: 20, base_unit: 'BOX', supplier_name: 'Sharma Spices & Provisions' }
-      ]);
-      setTasks([
-        { id: 't-1', assigned_to: 'Stock Staff', title: 'Transfer Fortune Oil from Godown to Rack 02', description: 'Main Shop low on oil (8 left). Move 1 carton.', priority: 'HIGH', status: 'PENDING', due_date: '2026-11-15' },
-        { id: 't-2', assigned_to: 'Stock Staff', title: 'Verify MDH Deggi Mirch Expiry in Second Shop', description: 'Check physical condition of 5 boxes.', priority: 'URGENT', status: 'PENDING', due_date: '2026-11-15' }
-      ]);
+      setExpiryAlerts([]);
+      setReorders([]);
+      setTasks([]);
       setGstData({
-        gstSales: { total_bills: 1, total_taxable: 49.52, total_cgst: 1.24, total_sgst: 1.24, total_igst: 0, total_sales: 52.00 },
+        gstSales: { total_bills: 0, total_taxable: 0, total_cgst: 0, total_sgst: 0, total_igst: 0, total_sales: 0 },
         otherSales: { total_bills: 0, total_sales: 0 },
-        gstPurchases: { total_invoices: 1, total_taxable: 1896.00, total_cgst: 47.40, total_sgst: 47.40, total_igst: 0, total_purchases: 1991.00 },
-        rateWiseSales: [{ gst_rate: 5, taxable_amount: 49.52, cgst_amount: 1.24, sgst_amount: 1.24, total_amount: 52.00 }]
+        gstPurchases: { total_invoices: 3, total_taxable: 32197.60, total_cgst: 912.36, total_sgst: 912.36, total_igst: 0, total_purchases: 34023.00 },
+        rateWiseSales: []
       });
       setSuppliers([
-        { id: 'sup-1', name: 'Ramesh Agrawal', business_name: 'Agrawal FMCG Distributors', gstin: '07AAACA1234A1Z5', phone: '+91 98110 22341', address: 'Grain Market, Khari Baoli, Delhi', return_policy: 'Full credit note 15 days before expiry', credit_terms_days: 15 },
-        { id: 'sup-2', name: 'Vikram Sharma', business_name: 'Sharma Spices & Provisions', gstin: '07BBBCB5678B1Z2', phone: '+91 98731 44552', address: 'Plot 42, Transport Nagar, Delhi', return_policy: 'Return acceptable 30 days prior', credit_terms_days: 21 }
+        { id: 'sup-jindal', name: 'Jindal Representative', business_name: 'Jindal Agencies', gstin: '05ABAPA2921P1ZY', phone: '+91 98972 10140', address: 'Saklani Complex, Railway Road, Rishikesh', return_policy: 'Full credit note for spices & detergents returned prior to expiry', credit_terms_days: 15 },
+        { id: 'sup-vijaya', name: 'Rishabh Agency Contact', business_name: 'THE VIJAYA AGENCIES', gstin: '05AFXPJ8419E1Z4', phone: '+91 97600 26617', address: '145/1 Laxman Jhula Road, Rishikesh', return_policy: 'Cadbury & personal care replacement on quarterly visit', credit_terms_days: 30 },
+        { id: 'sup-krishna', name: 'Rishabh / Krishna Rep', business_name: 'KRISHNA AGENCIES 26-27', gstin: '05AEJPC9715K1ZD', phone: '+91 70171 68755', address: 'Plot No-2, Sector-1, Industrial Area, Muni Ki Reti, Rishikesh', return_policy: 'Standard confectionery & FMCG credit note policy', credit_terms_days: 21 }
+      ]);
+      setPurchasesHistory([
+        {
+          id: 'purch-jindal-2186',
+          invoice_number: '2186',
+          supplier_name: 'Jindal Agencies',
+          supplier_gstin: '05ABAPA2921P1ZY',
+          invoice_date: '2026-10-18',
+          taxable_value: 4852.47,
+          cgst_amount: 228.74,
+          sgst_amount: 228.74,
+          igst_amount: 0,
+          grand_total: 5310.00,
+          verification_status: 'VERIFIED',
+          items: [
+            { product_name: 'MDH Kashmiri Mirch Powder 100g', quantity: 5, unit: 'UNIT', rate: 133.33, taxable_value: 666.65, gst_rate: 5, total_amount: 700.00 },
+            { product_name: 'Kitchen King Masala 100g', quantity: 2, unit: 'UNIT', rate: 133.33, taxable_value: 266.66, gst_rate: 5, total_amount: 280.00 },
+            { product_name: 'Double Engine Detergent Powder 1kg', quantity: 1, unit: 'BAG', rate: 1652.54, taxable_value: 1652.54, gst_rate: 18, total_amount: 1950.00 }
+          ]
+        },
+        {
+          id: 'purch-vijaya-9373',
+          invoice_number: 'CAD-9373',
+          supplier_name: 'THE VIJAYA AGENCIES',
+          supplier_gstin: '05AFXPJ8419E1Z4',
+          invoice_date: '2026-11-03',
+          taxable_value: 11716.90,
+          cgst_amount: 292.92,
+          sgst_amount: 292.92,
+          igst_amount: 0,
+          grand_total: 12303.00,
+          verification_status: 'VERIFIED',
+          items: [
+            { product_name: 'Cadbury Dairy Milk Chocolate ₹10', quantity: 6, unit: 'BOX', rate: 484.77, taxable_value: 2908.62, gst_rate: 5, total_amount: 3054.06 },
+            { product_name: 'Cadbury Dairy Milk Chocolate ₹45', quantity: 4, unit: 'BOX', rate: 1147.97, taxable_value: 4591.88, gst_rate: 5, total_amount: 4821.48 },
+            { product_name: 'Oreo Choco Cream Biscuit ₹10', quantity: 60, unit: 'PCS', rate: 8.66, taxable_value: 519.60, gst_rate: 5, total_amount: 545.58 }
+          ]
+        },
+        {
+          id: 'purch-krishna-284720',
+          invoice_number: 'B284720',
+          supplier_name: 'KRISHNA AGENCIES 26-27',
+          supplier_gstin: '05AEJPC9715K1ZD',
+          invoice_date: '2026-10-20',
+          taxable_value: 15628.23,
+          cgst_amount: 390.70,
+          sgst_amount: 390.70,
+          igst_amount: 0,
+          grand_total: 16410.00,
+          verification_status: 'VERIFIED',
+          items: [
+            { product_name: 'Hridayram Kaju Patishta 400g (Box)', quantity: 1, unit: 'CASE', rate: 2190.48, taxable_value: 2190.48, gst_rate: 5, total_amount: 2300.00 },
+            { product_name: 'Hridayram Gulab Jamun 1kg (12 Box)', quantity: 1, unit: 'CASE', rate: 1600.00, taxable_value: 1600.00, gst_rate: 5, total_amount: 1680.00 },
+            { product_name: 'HR Kachri Scheme Big (8 Bags)', quantity: 8, unit: 'BAG', rate: 982.10, taxable_value: 7856.80, gst_rate: 5, total_amount: 8249.64 }
+          ]
+        }
       ]);
     } finally {
       setLoading(false);
@@ -273,6 +325,44 @@ export default function App() {
       alert(`Success! Purchase Invoice ${scanResult.invoice_number} successfully verified and inwarded to inventory.`);
       setScanResult(null);
       setScanPreviewUrl(null);
+    }
+  };
+
+  const setItemExpiryQuick = (idx, months) => {
+    if (!scanResult || !scanResult.items) return;
+    const date = new Date();
+    date.setMonth(date.getMonth() + months);
+    const dateStr = date.toISOString().split('T')[0];
+    const newItems = [...scanResult.items];
+    newItems[idx].expiry_date = dateStr;
+    setScanResult({ ...scanResult, items: newItems });
+  };
+
+  const handleDeleteInvoice = async (invoiceId) => {
+    if (!confirm('Are you sure you want to delete this invoice? Related batches will be removed from stock.')) return;
+    try {
+      await axios.delete(`/api/purchases/${invoiceId}`);
+      alert('Invoice deleted successfully!');
+      fetchAllData();
+    } catch (err) {
+      console.warn('API delete offline, filtering client state:', err);
+      setPurchasesHistory(prev => prev.filter(p => p.id !== invoiceId));
+      alert('Invoice removed from register.');
+    }
+  };
+
+  const handleSaveEditedInvoice = async () => {
+    if (!editInvoice) return;
+    try {
+      await axios.put(`/api/purchases/${editInvoice.id}`, editInvoice);
+      alert('Invoice updated successfully!');
+      setEditInvoice(null);
+      fetchAllData();
+    } catch (err) {
+      console.warn('API update offline, updating client state:', err);
+      setPurchasesHistory(prev => prev.map(p => p.id === editInvoice.id ? editInvoice : p));
+      setEditInvoice(null);
+      alert('Invoice updated.');
     }
   };
 
@@ -1066,9 +1156,22 @@ export default function App() {
 
                         {/* Extracted Items & Destination Racks */}
                         <div>
-                          <label className="font-bold text-slate-700 text-xs block mb-2">
-                            Extracted Products & Assigned Storage Racks ({scanResult.items.length} items)
-                          </label>
+                          <div className="flex flex-wrap items-center justify-between mb-2">
+                            <label className="font-bold text-slate-700 text-xs">
+                              Extracted Products & Assigned Storage Racks ({scanResult.items.length} items)
+                            </label>
+                            <span className="text-3xs bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
+                              💡 Check packaging box for Expiry Date
+                            </span>
+                          </div>
+                          
+                          <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-2.5 mb-2.5 flex items-start space-x-2 text-2xs text-amber-900">
+                            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                            <div>
+                              <strong>Expiry Tracking Workflow:</strong> Indian distributor bills do not print product expiry dates. When unboxing items onto godown pallets or shop shelves, verify physical box expiry and use quick buttons (<strong>+3M, +6M, +1Y</strong>) to save shelf life with 1 tap.
+                            </div>
+                          </div>
+
                           <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
                             {scanResult.items.map((it, idx) => (
                               <div key={idx} className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-2">
@@ -1109,17 +1212,24 @@ export default function App() {
                                     />
                                   </div>
                                   <div>
-                                    <span className="text-slate-400 block">Expiry Date</span>
+                                    <span className="text-slate-500 font-semibold block">Expiry Date</span>
                                     <input 
                                       type="date"
-                                      value={it.expiry_date}
+                                      value={it.expiry_date || ''}
                                       onChange={(e) => {
                                         const newItems = [...scanResult.items];
                                         newItems[idx].expiry_date = e.target.value;
                                         setScanResult({ ...scanResult, items: newItems });
                                       }}
-                                      className="p-1 border border-slate-300 rounded bg-white w-full"
+                                      className="p-1 border border-slate-300 rounded bg-white w-full text-2xs"
                                     />
+                                    <div className="flex items-center gap-1 mt-1">
+                                      <span className="text-3xs text-slate-400 font-bold">Quick:</span>
+                                      <button type="button" onClick={() => setItemExpiryQuick(idx, 3)} className="px-1 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-3xs font-bold">+3M</button>
+                                      <button type="button" onClick={() => setItemExpiryQuick(idx, 6)} className="px-1 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-3xs font-bold">+6M</button>
+                                      <button type="button" onClick={() => setItemExpiryQuick(idx, 9)} className="px-1 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-3xs font-bold">+9M</button>
+                                      <button type="button" onClick={() => setItemExpiryQuick(idx, 12)} className="px-1 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-3xs font-bold">+1Y</button>
+                                    </div>
                                   </div>
                                   <div>
                                     <span className="text-slate-400 block">Destination Facility</span>
@@ -1193,28 +1303,54 @@ export default function App() {
                           <th className="py-2.5 px-3">GST Total</th>
                           <th className="py-2.5 px-3">Grand Total</th>
                           <th className="py-2.5 px-3">Status</th>
+                          <th className="py-2.5 px-3 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {purchasesHistory.length === 0 ? (
                           <tr>
-                            <td colSpan="7" className="py-6 text-center text-slate-400">
+                            <td colSpan="8" className="py-6 text-center text-slate-400">
                               No purchase bills recorded yet. Use the scanner above to scan and inward bills.
                             </td>
                           </tr>
                         ) : (
                           purchasesHistory.map(p => (
-                            <tr key={p.id} className="hover:bg-slate-50">
+                            <tr key={p.id} className="hover:bg-slate-50 transition">
                               <td className="py-3 px-3 font-mono font-bold text-slate-800">{p.invoice_number}</td>
                               <td className="py-3 px-3 font-semibold text-slate-800">{p.supplier_name}</td>
                               <td className="py-3 px-3 text-slate-500">{p.invoice_date}</td>
-                              <td className="py-3 px-3">₹{p.taxable_value.toFixed(2)}</td>
-                              <td className="py-3 px-3">₹{(p.cgst_amount + p.sgst_amount + p.igst_amount).toFixed(2)}</td>
-                              <td className="py-3 px-3 font-bold text-emerald-800">₹{p.grand_total.toFixed(2)}</td>
+                              <td className="py-3 px-3">₹{Number(p.taxable_value || 0).toFixed(2)}</td>
+                              <td className="py-3 px-3">₹{Number((p.cgst_amount || 0) + (p.sgst_amount || 0) + (p.igst_amount || 0)).toFixed(2)}</td>
+                              <td className="py-3 px-3 font-bold text-emerald-800">₹{Number(p.grand_total || 0).toFixed(2)}</td>
                               <td className="py-3 px-3">
                                 <span className="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-2xs">
                                   {p.verification_status}
                                 </span>
+                              </td>
+                              <td className="py-3 px-3 text-right">
+                                <div className="flex items-center justify-end space-x-1">
+                                  <button
+                                    onClick={() => setViewInvoice(p)}
+                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                    title="View Invoice Details"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditInvoice({ ...p })}
+                                    className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition"
+                                    title="Edit Invoice"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteInvoice(p.id)}
+                                    className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                                    title="Delete Invoice"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))
@@ -1830,6 +1966,176 @@ export default function App() {
               </button>
               <button
                 onClick={() => setShowTransferModal(false)}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-4 py-2.5 rounded-xl text-xs"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 3: VIEW INVOICE MODAL                               */}
+      {/* ========================================================= */}
+      {viewInvoice && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-2xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full uppercase">
+                  {viewInvoice.verification_status || 'VERIFIED'}
+                </span>
+                <h3 className="font-black text-lg text-slate-900 mt-1">Invoice #{viewInvoice.invoice_number}</h3>
+              </div>
+              <button 
+                onClick={() => setViewInvoice(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl text-xs border border-slate-200">
+              <div>
+                <span className="text-slate-400 block text-2xs uppercase font-bold">Supplier</span>
+                <span className="font-bold text-slate-800">{viewInvoice.supplier_name}</span>
+                {viewInvoice.supplier_gstin && (
+                  <span className="block font-mono text-2xs text-slate-500 mt-0.5">GSTIN: {viewInvoice.supplier_gstin}</span>
+                )}
+              </div>
+              <div>
+                <span className="text-slate-400 block text-2xs uppercase font-bold">Invoice Date</span>
+                <span className="font-bold text-slate-800">{viewInvoice.invoice_date}</span>
+              </div>
+            </div>
+
+            {/* Line items if available */}
+            {viewInvoice.items && viewInvoice.items.length > 0 && (
+              <div>
+                <h4 className="text-xs font-bold text-slate-700 mb-2">Item Breakdown ({viewInvoice.items.length} items)</h4>
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden text-xs">
+                  {viewInvoice.items.map((it, idx) => (
+                    <div key={idx} className="p-2.5 flex justify-between items-center bg-white hover:bg-slate-50">
+                      <div>
+                        <span className="font-semibold text-slate-800 block">{it.product_name || it.name}</span>
+                        <span className="text-2xs text-slate-400">{it.quantity} {it.unit || 'UNIT'} @ ₹{it.rate || it.purchase_price} (GST {it.gst_rate}%)</span>
+                      </div>
+                      <span className="font-bold text-slate-800">₹{Number(it.total_amount || 0).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tax & Total Summary */}
+            <div className="bg-emerald-50/70 p-4 rounded-xl border border-emerald-200 space-y-1.5 text-xs">
+              <div className="flex justify-between text-slate-600">
+                <span>Taxable Value:</span>
+                <span className="font-mono">₹{Number(viewInvoice.taxable_value || 0).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>CGST + SGST:</span>
+                <span className="font-mono">₹{Number((viewInvoice.cgst_amount || 0) + (viewInvoice.sgst_amount || 0) + (viewInvoice.igst_amount || 0)).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between font-black text-base text-slate-900 pt-2 border-t border-emerald-200">
+                <span>Grand Total:</span>
+                <span className="text-emerald-800">₹{Number(viewInvoice.grand_total || 0).toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setViewInvoice(null)}
+                className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-5 py-2.5 rounded-xl text-xs"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 4: EDIT INVOICE MODAL                                */}
+      {/* ========================================================= */}
+      {editInvoice && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-black text-base text-slate-900">Edit Invoice Record</h3>
+              <button 
+                onClick={() => setEditInvoice(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Invoice Number</label>
+                <input 
+                  type="text"
+                  value={editInvoice.invoice_number || ''}
+                  onChange={(e) => setEditInvoice({ ...editInvoice, invoice_number: e.target.value })}
+                  className="w-full border border-slate-300 rounded-lg p-2 font-mono font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Supplier Name</label>
+                <input 
+                  type="text"
+                  value={editInvoice.supplier_name || ''}
+                  onChange={(e) => setEditInvoice({ ...editInvoice, supplier_name: e.target.value })}
+                  className="w-full border border-slate-300 rounded-lg p-2 font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Invoice Date</label>
+                <input 
+                  type="date"
+                  value={editInvoice.invoice_date || ''}
+                  onChange={(e) => setEditInvoice({ ...editInvoice, invoice_date: e.target.value })}
+                  className="w-full border border-slate-300 rounded-lg p-2"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Taxable Value (₹)</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    value={editInvoice.taxable_value || 0}
+                    onChange={(e) => setEditInvoice({ ...editInvoice, taxable_value: Number(e.target.value) })}
+                    className="w-full border border-slate-300 rounded-lg p-2"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Grand Total (₹)</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    value={editInvoice.grand_total || 0}
+                    onChange={(e) => setEditInvoice({ ...editInvoice, grand_total: Number(e.target.value) })}
+                    className="w-full border border-slate-300 rounded-lg p-2 font-bold text-emerald-800"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex space-x-2 pt-3">
+              <button
+                onClick={handleSaveEditedInvoice}
+                className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl text-xs"
+              >
+                Save Changes
+              </button>
+              <button
+                onClick={() => setEditInvoice(null)}
                 className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-4 py-2.5 rounded-xl text-xs"
               >
                 Cancel
