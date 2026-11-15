@@ -844,6 +844,34 @@ app.get('/api/suppliers', (req, res) => {
   }
 });
 
+// List All Purchase Invoices with Items & Supplier Info
+app.get('/api/purchases', (req, res) => {
+  try {
+    const purchases = db.prepare(`
+      SELECT p.*, s.business_name as supplier_name, s.phone as supplier_phone, s.gstin as supplier_gstin
+      FROM purchases p
+      JOIN suppliers s ON p.supplier_id = s.id
+      ORDER BY p.invoice_date DESC, p.created_at DESC
+    `).all();
+
+    const getItems = db.prepare(`
+      SELECT pi.*, p.name as product_name
+      FROM purchase_items pi
+      LEFT JOIN products p ON pi.product_id = p.id
+      WHERE pi.purchase_id = ?
+    `);
+
+    const result = purchases.map(p => ({
+      ...p,
+      items: getItems.all(p.id)
+    }));
+
+    res.json({ success: true, data: result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // View Single Purchase Invoice with Items
 app.get('/api/purchases/:id', (req, res) => {
   try {
@@ -871,24 +899,67 @@ app.get('/api/purchases/:id', (req, res) => {
   }
 });
 
-// Update / Edit Purchase Invoice
+// Update / Edit Purchase Invoice (Full Header & Line Items)
 app.put('/api/purchases/:id', (req, res) => {
-  const { invoice_number, invoice_date, grand_total, taxable_value, cgst_amount, sgst_amount, payment_status, verified_by } = req.body;
+  const { invoice_number, invoice_date, grand_total, taxable_value, cgst_amount, sgst_amount, is_gst_bill, payment_status, verified_by, items } = req.body;
   try {
-    db.prepare(`
-      UPDATE purchases 
-      SET invoice_number = COALESCE(?, invoice_number),
-          invoice_date = COALESCE(?, invoice_date),
-          grand_total = COALESCE(?, grand_total),
-          taxable_value = COALESCE(?, taxable_value),
-          cgst_amount = COALESCE(?, cgst_amount),
-          sgst_amount = COALESCE(?, sgst_amount),
-          payment_status = COALESCE(?, payment_status)
-      WHERE id = ?
-    `).run(invoice_number, invoice_date, grand_total, taxable_value, cgst_amount, sgst_amount, payment_status, req.params.id);
+    const editTx = db.transaction(() => {
+      const existing = db.prepare('SELECT * FROM purchases WHERE id = ?').get(req.params.id);
+      if (!existing) throw new Error('Invoice not found');
 
-    logAudit(verified_by || 'Owner', 'EDIT_PURCHASE', 'PURCHASES', `Edited invoice ${invoice_number || req.params.id}`);
-    res.json({ success: true, message: 'Invoice updated successfully!' });
+      db.prepare(`
+        UPDATE purchases 
+        SET invoice_number = COALESCE(?, invoice_number),
+            invoice_date = COALESCE(?, invoice_date),
+            grand_total = COALESCE(?, grand_total),
+            taxable_value = COALESCE(?, taxable_value),
+            cgst_amount = COALESCE(?, cgst_amount),
+            sgst_amount = COALESCE(?, sgst_amount),
+            is_gst_bill = COALESCE(?, is_gst_bill),
+            payment_status = COALESCE(?, payment_status)
+        WHERE id = ?
+      `).run(invoice_number, invoice_date, grand_total, taxable_value, cgst_amount, sgst_amount, is_gst_bill !== undefined ? (is_gst_bill ? 1 : 0) : null, payment_status, req.params.id);
+
+      // If item list is provided, update line items
+      if (items && Array.isArray(items) && items.length > 0) {
+        db.prepare('DELETE FROM purchase_items WHERE purchase_id = ?').run(req.params.id);
+        const insertItem = db.prepare(`
+          INSERT INTO purchase_items (
+            id, purchase_id, product_id, batch_number, expiry_date, quantity, unit, rate,
+            taxable_value, gst_rate, cgst, sgst, igst, total_amount,
+            destination_location_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        items.forEach((it, idx) => {
+          let prodId = it.product_id;
+          if (!prodId) {
+            const p = db.prepare('SELECT id FROM products WHERE name = ?').get(it.product_name);
+            if (p) prodId = p.id;
+            else {
+              prodId = `prod_${Date.now()}_${idx}`;
+              db.prepare(`
+                INSERT INTO products (id, name, category, hsn_code, base_unit, purchase_price, selling_price, mrp, gst_rate, preferred_supplier_id, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+              `).run(prodId, it.product_name, 'Groceries', it.hsn_code || '2106', it.unit || 'UNIT', it.rate || 0, Number(((it.rate || 0) * 1.15).toFixed(2)), Number(((it.rate || 0) * 1.25).toFixed(2)), it.gst_rate || 0, existing.supplier_id);
+            }
+          }
+
+          insertItem.run(
+            `pi_edit_${Date.now()}_${idx}`, req.params.id, prodId, it.batch_number || 'BATCH-EDIT',
+            it.expiry_date || null, it.quantity || 1, it.unit || 'UNIT', it.rate || 0,
+            it.taxable_value || ((it.quantity || 1) * (it.rate || 0)), it.gst_rate || 0,
+            it.cgst || 0, it.sgst || 0, it.igst || 0, it.total_amount || 0,
+            it.destination_location_id || 'loc-main'
+          );
+        });
+      }
+
+      logAudit(verified_by || 'Owner', 'EDIT_PURCHASE', 'PURCHASES', `Updated invoice ${invoice_number || existing.invoice_number} and item breakdown`);
+    });
+
+    editTx();
+    res.json({ success: true, message: 'Invoice and item breakdown updated successfully!' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

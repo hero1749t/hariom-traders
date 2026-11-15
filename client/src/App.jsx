@@ -49,6 +49,12 @@ export default function App() {
   const [viewInvoice, setViewInvoice] = useState(null);
   const [editInvoice, setEditInvoice] = useState(null);
 
+  // Purchases Filter States (Standard starting from October 2026)
+  const [purchaseBillTypeFilter, setPurchaseBillTypeFilter] = useState('ALL'); // 'ALL', 'GST', 'NON_GST'
+  const [purchaseMonthFilter, setPurchaseMonthFilter] = useState('ALL'); // 'ALL', '10', '11', '12', 'Q3', 'Q4'
+  const [purchaseSupplierFilter, setPurchaseSupplierFilter] = useState('ALL');
+  const [purchaseSearch, setPurchaseSearch] = useState('');
+
   // Search & Filter States
   const [inventoryLocationFilter, setInventoryLocationFilter] = useState('ALL');
   const [productSearch, setProductSearch] = useState('');
@@ -183,6 +189,30 @@ export default function App() {
             { product_name: 'Hridayram Kaju Patishta 400g (Box)', quantity: 1, unit: 'CASE', rate: 2190.48, taxable_value: 2190.48, gst_rate: 5, total_amount: 2300.00 },
             { product_name: 'Hridayram Gulab Jamun 1kg (12 Box)', quantity: 1, unit: 'CASE', rate: 1600.00, taxable_value: 1600.00, gst_rate: 5, total_amount: 1680.00 },
             { product_name: 'HR Kachri Scheme Big (8 Bags)', quantity: 8, unit: 'BAG', rate: 982.10, taxable_value: 7856.80, gst_rate: 5, total_amount: 8249.64 }
+          ]
+        },
+        {
+          id: 'purch-cashmemo-211126',
+          invoice_number: 'CM-211126',
+          supplier_name: 'Local Confectionery & Cash Vendor',
+          supplier_gstin: '',
+          invoice_date: '2026-11-21',
+          is_gst_bill: 0,
+          taxable_value: 5732.00,
+          cgst_amount: 0,
+          sgst_amount: 0,
+          igst_amount: 0,
+          grand_total: 5732.00,
+          verification_status: 'VERIFIED',
+          items: [
+            { product_name: 'Tarang 275', quantity: 3, unit: 'UNIT', rate: 237.00, taxable_value: 711.00, gst_rate: 0, total_amount: 711.00 },
+            { product_name: 'Albela 180', quantity: 6, unit: 'UNIT', rate: 155.16, taxable_value: 931.00, gst_rate: 0, total_amount: 931.00 },
+            { product_name: 'Milk 240', quantity: 3, unit: 'UNIT', rate: 206.66, taxable_value: 620.00, gst_rate: 0, total_amount: 620.00 },
+            { product_name: 'Magadh 280', quantity: 2, unit: 'UNIT', rate: 241.50, taxable_value: 483.00, gst_rate: 0, total_amount: 483.00 },
+            { product_name: 'Anupam 415', quantity: 3, unit: 'UNIT', rate: 357.66, taxable_value: 1073.00, gst_rate: 0, total_amount: 1073.00 },
+            { product_name: 'Upahar 310', quantity: 3, unit: 'UNIT', rate: 267.33, taxable_value: 802.00, gst_rate: 0, total_amount: 802.00 },
+            { product_name: 'Samrat 380', quantity: 2, unit: 'UNIT', rate: 327.50, taxable_value: 655.00, gst_rate: 0, total_amount: 655.00 },
+            { product_name: 'Meetha Pan 360', quantity: 3, unit: 'UNIT', rate: 310.66, taxable_value: 932.00, gst_rate: 0, total_amount: 932.00 }
           ]
         }
       ]);
@@ -355,16 +385,132 @@ export default function App() {
     if (!editInvoice) return;
     try {
       await axios.put(`/api/purchases/${editInvoice.id}`, editInvoice);
-      alert('Invoice updated successfully!');
+      alert('Invoice and items updated successfully!');
       setEditInvoice(null);
       fetchAllData();
     } catch (err) {
       console.warn('API update offline, updating client state:', err);
       setPurchasesHistory(prev => prev.map(p => p.id === editInvoice.id ? editInvoice : p));
       setEditInvoice(null);
-      alert('Invoice updated.');
+      alert('Invoice and items updated in register.');
     }
   };
+
+  const updateEditInvoiceItem = (idx, field, value) => {
+    if (!editInvoice || !editInvoice.items) return;
+    const newItems = [...editInvoice.items];
+    newItems[idx] = { ...newItems[idx], [field]: value };
+
+    // Auto-calculate line taxable and total
+    const qty = Number(newItems[idx].quantity || 0);
+    const rate = Number(newItems[idx].rate || 0);
+    const gstRate = Number(newItems[idx].gst_rate || 0);
+    const lineTaxable = Number((qty * rate).toFixed(2));
+    const lineGst = Number(((lineTaxable * gstRate) / 100).toFixed(2));
+    const lineTotal = Number((lineTaxable + lineGst).toFixed(2));
+
+    newItems[idx].taxable_value = lineTaxable;
+    newItems[idx].total_amount = lineTotal;
+    newItems[idx].cgst = editInvoice.is_gst_bill ? Number((lineGst / 2).toFixed(2)) : 0;
+    newItems[idx].sgst = editInvoice.is_gst_bill ? Number((lineGst / 2).toFixed(2)) : 0;
+
+    // Recalculate invoice totals
+    let newTaxable = 0;
+    let newCgst = 0;
+    let newSgst = 0;
+    let newGrand = 0;
+    newItems.forEach(it => {
+      newTaxable += it.taxable_value || 0;
+      newCgst += it.cgst || 0;
+      newSgst += it.sgst || 0;
+      newGrand += it.total_amount || 0;
+    });
+
+    setEditInvoice({
+      ...editInvoice,
+      items: newItems,
+      taxable_value: Number(newTaxable.toFixed(2)),
+      cgst_amount: Number(newCgst.toFixed(2)),
+      sgst_amount: Number(newSgst.toFixed(2)),
+      grand_total: Number(newGrand.toFixed(2))
+    });
+  };
+
+  const addEditInvoiceItem = () => {
+    if (!editInvoice) return;
+    const items = editInvoice.items || [];
+    const isGst = !!editInvoice.is_gst_bill;
+    const newItem = {
+      product_name: 'New Product',
+      quantity: 1,
+      unit: 'UNIT',
+      rate: 100,
+      taxable_value: 100,
+      gst_rate: isGst ? 5 : 0,
+      cgst: isGst ? 2.5 : 0,
+      sgst: isGst ? 2.5 : 0,
+      total_amount: isGst ? 105 : 100
+    };
+    const newItems = [...items, newItem];
+    let newTaxable = 0;
+    let newGrand = 0;
+    newItems.forEach(it => {
+      newTaxable += it.taxable_value || 0;
+      newGrand += it.total_amount || 0;
+    });
+    setEditInvoice({
+      ...editInvoice,
+      items: newItems,
+      taxable_value: Number(newTaxable.toFixed(2)),
+      grand_total: Number(newGrand.toFixed(2))
+    });
+  };
+
+  const removeEditInvoiceItem = (idx) => {
+    if (!editInvoice || !editInvoice.items) return;
+    const newItems = editInvoice.items.filter((_, i) => i !== idx);
+    let newTaxable = 0;
+    let newGrand = 0;
+    newItems.forEach(it => {
+      newTaxable += it.taxable_value || 0;
+      newGrand += it.total_amount || 0;
+    });
+    setEditInvoice({
+      ...editInvoice,
+      items: newItems,
+      taxable_value: Number(newTaxable.toFixed(2)),
+      grand_total: Number(newGrand.toFixed(2))
+    });
+  };
+
+  // Filtered Purchases (Standard baseline from October 2026 onwards)
+  const filteredPurchases = purchasesHistory.filter(p => {
+    // 1. Bill Type Filter (Pakka vs Kaccha)
+    if (purchaseBillTypeFilter === 'GST' && !p.is_gst_bill) return false;
+    if (purchaseBillTypeFilter === 'NON_GST' && p.is_gst_bill) return false;
+
+    // 2. Month / Period Filter
+    const pDate = p.invoice_date || '';
+    if (purchaseMonthFilter === '10' && !pDate.startsWith('2026-10')) return false;
+    if (purchaseMonthFilter === '11' && !pDate.startsWith('2026-11')) return false;
+    if (purchaseMonthFilter === '12' && !pDate.startsWith('2026-12')) return false;
+    if (purchaseMonthFilter === 'Q3' && !(pDate.startsWith('2026-10') || pDate.startsWith('2026-11') || pDate.startsWith('2026-12'))) return false;
+    if (purchaseMonthFilter === 'Q4' && !(pDate.startsWith('2027-01') || pDate.startsWith('2027-02') || pDate.startsWith('2027-03'))) return false;
+
+    // 3. Supplier Filter
+    if (purchaseSupplierFilter !== 'ALL' && p.supplier_name !== purchaseSupplierFilter) return false;
+
+    // 4. Search Filter
+    if (purchaseSearch.trim()) {
+      const q = purchaseSearch.toLowerCase();
+      const matchNo = (p.invoice_number || '').toLowerCase().includes(q);
+      const matchSup = (p.supplier_name || '').toLowerCase().includes(q);
+      const matchItems = p.items && p.items.some(it => (it.product_name || it.name || '').toLowerCase().includes(q));
+      if (!matchNo && !matchSup && !matchItems) return false;
+    }
+
+    return true;
+  });
 
   useEffect(() => {
     fetchAllData();
@@ -1289,57 +1435,141 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Purchase Bills Register Table */}
-                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-3">
-                  <h4 className="font-bold text-slate-800 text-sm">Archived Purchase Invoices & Scans</h4>
+                {/* Purchase Bills Register Table & Standard Filters */}
+                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-sm">Archived Purchase Invoices & Cash Memos</h4>
+                      <p className="text-2xs text-slate-500">Standard accounting baseline starting from October 2026 onwards</p>
+                    </div>
+
+                    {/* Pakka vs Kaccha Filter Tabs */}
+                    <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+                      <button
+                        onClick={() => setPurchaseBillTypeFilter('ALL')}
+                        className={`px-3 py-1.5 rounded-lg transition ${purchaseBillTypeFilter === 'ALL' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                      >
+                        All Bills ({purchasesHistory.length})
+                      </button>
+                      <button
+                        onClick={() => setPurchaseBillTypeFilter('GST')}
+                        className={`px-3 py-1.5 rounded-lg transition flex items-center space-x-1 ${purchaseBillTypeFilter === 'GST' ? 'bg-emerald-700 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                      >
+                        <span>🏛️ Pakka (GST)</span>
+                        <span className="text-3xs opacity-80">({purchasesHistory.filter(p => p.is_gst_bill).length})</span>
+                      </button>
+                      <button
+                        onClick={() => setPurchaseBillTypeFilter('NON_GST')}
+                        className={`px-3 py-1.5 rounded-lg transition flex items-center space-x-1 ${purchaseBillTypeFilter === 'NON_GST' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                      >
+                        <span>📝 Kaccha (Cash Memos)</span>
+                        <span className="text-3xs opacity-80">({purchasesHistory.filter(p => !p.is_gst_bill).length})</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Period, Supplier, and Search Bar */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                    <div>
+                      <label className="text-3xs font-bold text-slate-400 block mb-1 uppercase">Period Filter</label>
+                      <select
+                        value={purchaseMonthFilter}
+                        onChange={(e) => setPurchaseMonthFilter(e.target.value)}
+                        className="w-full p-2 border border-slate-300 rounded-lg bg-slate-50 font-medium"
+                      >
+                        <option value="ALL">All Standard (Oct 2026 - Mar 2027)</option>
+                        <option value="10">October 2026</option>
+                        <option value="11">November 2026</option>
+                        <option value="12">December 2026</option>
+                        <option value="Q3">Q3 (October - December)</option>
+                        <option value="Q4">Q4 (January - March 2027)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-3xs font-bold text-slate-400 block mb-1 uppercase">Supplier Filter</label>
+                      <select
+                        value={purchaseSupplierFilter}
+                        onChange={(e) => setPurchaseSupplierFilter(e.target.value)}
+                        className="w-full p-2 border border-slate-300 rounded-lg bg-slate-50 font-medium"
+                      >
+                        <option value="ALL">All Suppliers & Vendors</option>
+                        {Array.from(new Set(purchasesHistory.map(p => p.supplier_name))).map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-3xs font-bold text-slate-400 block mb-1 uppercase">Search Register</label>
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                        <input
+                          type="text"
+                          placeholder="Search Bill # or Item..."
+                          value={purchaseSearch}
+                          onChange={(e) => setPurchaseSearch(e.target.value)}
+                          className="w-full pl-8 pr-2.5 py-2 border border-slate-300 rounded-lg bg-slate-50 text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Invoices List Table */}
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-100 text-slate-600 uppercase font-semibold">
                         <tr>
+                          <th className="py-2.5 px-3">Type</th>
                           <th className="py-2.5 px-3">Invoice Number</th>
                           <th className="py-2.5 px-3">Supplier Name</th>
-                          <th className="py-2.5 px-3">Invoice Date</th>
+                          <th className="py-2.5 px-3">Date</th>
+                          <th className="py-2.5 px-3">Items</th>
                           <th className="py-2.5 px-3">Taxable Value</th>
                           <th className="py-2.5 px-3">GST Total</th>
                           <th className="py-2.5 px-3">Grand Total</th>
-                          <th className="py-2.5 px-3">Status</th>
                           <th className="py-2.5 px-3 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {purchasesHistory.length === 0 ? (
+                        {filteredPurchases.length === 0 ? (
                           <tr>
-                            <td colSpan="8" className="py-6 text-center text-slate-400">
-                              No purchase bills recorded yet. Use the scanner above to scan and inward bills.
+                            <td colSpan="9" className="py-8 text-center text-slate-400">
+                              No purchase records match the selected filter criteria.
                             </td>
                           </tr>
                         ) : (
-                          purchasesHistory.map(p => (
+                          filteredPurchases.map(p => (
                             <tr key={p.id} className="hover:bg-slate-50 transition">
+                              <td className="py-3 px-3">
+                                <span className={`font-bold px-2 py-0.5 rounded text-3xs ${p.is_gst_bill ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                  {p.is_gst_bill ? 'Pakka (GST)' : 'Kaccha (Cash)'}
+                                </span>
+                              </td>
                               <td className="py-3 px-3 font-mono font-bold text-slate-800">{p.invoice_number}</td>
                               <td className="py-3 px-3 font-semibold text-slate-800">{p.supplier_name}</td>
                               <td className="py-3 px-3 text-slate-500">{p.invoice_date}</td>
+                              <td className="py-3 px-3">
+                                <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-3xs font-semibold">
+                                  {p.items ? p.items.length : 1} items
+                                </span>
+                              </td>
                               <td className="py-3 px-3">₹{Number(p.taxable_value || 0).toFixed(2)}</td>
                               <td className="py-3 px-3">₹{Number((p.cgst_amount || 0) + (p.sgst_amount || 0) + (p.igst_amount || 0)).toFixed(2)}</td>
                               <td className="py-3 px-3 font-bold text-emerald-800">₹{Number(p.grand_total || 0).toFixed(2)}</td>
-                              <td className="py-3 px-3">
-                                <span className="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-2xs">
-                                  {p.verification_status}
-                                </span>
-                              </td>
                               <td className="py-3 px-3 text-right">
                                 <div className="flex items-center justify-end space-x-1">
                                   <button
                                     onClick={() => setViewInvoice(p)}
                                     className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                                    title="View Invoice Details"
+                                    title="View Full Bill & Line Items"
                                   >
                                     <Eye className="w-3.5 h-3.5" />
                                   </button>
                                   <button
-                                    onClick={() => setEditInvoice({ ...p })}
+                                    onClick={() => setEditInvoice({ ...p, items: p.items ? p.items.map(it => ({ ...it })) : [] })}
                                     className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition"
-                                    title="Edit Invoice"
+                                    title="Edit Full Invoice & Items"
                                   >
                                     <Edit className="w-3.5 h-3.5" />
                                   </button>
@@ -2057,13 +2287,20 @@ export default function App() {
       )}
 
       {/* ========================================================= */}
-      {/* MODAL 4: EDIT INVOICE MODAL                                */}
+      {/* MODAL 4: COMPLETE ITEM-LEVEL INVOICE & CASH MEMO EDITOR    */}
       {/* ========================================================= */}
       {editInvoice && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-black text-base text-slate-900">Edit Invoice Record</h3>
+              <div>
+                <span className={`text-3xs font-bold px-2 py-0.5 rounded-full uppercase ${editInvoice.is_gst_bill ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                  {editInvoice.is_gst_bill ? 'Pakka (GST) Tax Invoice' : 'Kaccha (Non-GST) Cash Memo'}
+                </span>
+                <h3 className="font-black text-lg text-slate-900 mt-1">
+                  Edit Invoice #{editInvoice.invoice_number || 'New'}
+                </h3>
+              </div>
               <button 
                 onClick={() => setEditInvoice(null)}
                 className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
@@ -2072,71 +2309,187 @@ export default function App() {
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div>
+            {/* Header Fields & Bill Type Switch */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              <div className="sm:col-span-1">
                 <label className="font-semibold text-slate-700 block mb-1">Invoice Number</label>
                 <input 
                   type="text"
                   value={editInvoice.invoice_number || ''}
                   onChange={(e) => setEditInvoice({ ...editInvoice, invoice_number: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg p-2 font-mono font-bold"
+                  className="w-full border border-slate-300 rounded-lg p-2 font-mono font-bold bg-white text-xs"
                 />
               </div>
 
-              <div>
+              <div className="sm:col-span-1">
                 <label className="font-semibold text-slate-700 block mb-1">Supplier Name</label>
                 <input 
                   type="text"
                   value={editInvoice.supplier_name || ''}
                   onChange={(e) => setEditInvoice({ ...editInvoice, supplier_name: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg p-2 font-semibold"
+                  className="w-full border border-slate-300 rounded-lg p-2 font-semibold bg-white text-xs"
                 />
               </div>
 
-              <div>
+              <div className="sm:col-span-1">
                 <label className="font-semibold text-slate-700 block mb-1">Invoice Date</label>
                 <input 
                   type="date"
                   value={editInvoice.invoice_date || ''}
                   onChange={(e) => setEditInvoice({ ...editInvoice, invoice_date: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg p-2"
+                  className="w-full border border-slate-300 rounded-lg p-2 bg-white text-xs"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Taxable Value (₹)</label>
-                  <input 
-                    type="number"
-                    step="0.01"
-                    value={editInvoice.taxable_value || 0}
-                    onChange={(e) => setEditInvoice({ ...editInvoice, taxable_value: Number(e.target.value) })}
-                    className="w-full border border-slate-300 rounded-lg p-2"
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Grand Total (₹)</label>
-                  <input 
-                    type="number"
-                    step="0.01"
-                    value={editInvoice.grand_total || 0}
-                    onChange={(e) => setEditInvoice({ ...editInvoice, grand_total: Number(e.target.value) })}
-                    className="w-full border border-slate-300 rounded-lg p-2 font-bold text-emerald-800"
-                  />
-                </div>
+              <div className="sm:col-span-1">
+                <label className="font-semibold text-slate-700 block mb-1">Bill Type</label>
+                <select
+                  value={editInvoice.is_gst_bill ? '1' : '0'}
+                  onChange={(e) => {
+                    const isGst = e.target.value === '1';
+                    setEditInvoice({ ...editInvoice, is_gst_bill: isGst });
+                  }}
+                  className="w-full border border-slate-300 rounded-lg p-2 font-semibold bg-white text-xs"
+                >
+                  <option value="1">🏛️ GST (Pakka)</option>
+                  <option value="0">📝 Non-GST (Kaccha)</option>
+                </select>
               </div>
             </div>
 
-            <div className="flex space-x-2 pt-3">
+            {/* Line Items Editor Table */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="font-bold text-slate-800 text-xs">
+                  Line Items & Quantities ({editInvoice.items ? editInvoice.items.length : 0})
+                </label>
+                <button
+                  type="button"
+                  onClick={addEditInvoiceItem}
+                  className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-2xs font-bold flex items-center space-x-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Product Row</span>
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {(!editInvoice.items || editInvoice.items.length === 0) ? (
+                  <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center text-slate-400 text-xs">
+                    No items attached to this invoice yet. Click "+ Add Product Row" above to add products.
+                  </div>
+                ) : (
+                  editInvoice.items.map((it, idx) => (
+                    <div key={idx} className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs flex flex-wrap items-center gap-2">
+                      <div className="flex-1 min-w-[140px]">
+                        <span className="text-3xs text-slate-400 block font-semibold uppercase">Product Name</span>
+                        <input
+                          type="text"
+                          value={it.product_name || it.name || ''}
+                          onChange={(e) => updateEditInvoiceItem(idx, 'product_name', e.target.value)}
+                          className="w-full p-1 border border-slate-300 rounded bg-white font-semibold text-xs"
+                        />
+                      </div>
+
+                      <div className="w-16">
+                        <span className="text-3xs text-slate-400 block font-semibold uppercase">Qty</span>
+                        <input
+                          type="number"
+                          step="1"
+                          value={it.quantity || 1}
+                          onChange={(e) => updateEditInvoiceItem(idx, 'quantity', Number(e.target.value))}
+                          className="w-full p-1 border border-slate-300 rounded bg-white font-bold text-center text-xs"
+                        />
+                      </div>
+
+                      <div className="w-18">
+                        <span className="text-3xs text-slate-400 block font-semibold uppercase">Unit</span>
+                        <select
+                          value={it.unit || 'UNIT'}
+                          onChange={(e) => updateEditInvoiceItem(idx, 'unit', e.target.value)}
+                          className="w-full p-1 border border-slate-300 rounded bg-white text-3xs font-semibold"
+                        >
+                          <option value="UNIT">UNIT</option>
+                          <option value="PCS">PCS</option>
+                          <option value="BOX">BOX</option>
+                          <option value="CASE">CASE</option>
+                          <option value="BAG">BAG</option>
+                        </select>
+                      </div>
+
+                      <div className="w-20">
+                        <span className="text-3xs text-slate-400 block font-semibold uppercase">Rate (₹)</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={it.rate || 0}
+                          onChange={(e) => updateEditInvoiceItem(idx, 'rate', Number(e.target.value))}
+                          className="w-full p-1 border border-slate-300 rounded bg-white text-xs font-mono"
+                        />
+                      </div>
+
+                      {editInvoice.is_gst_bill && (
+                        <div className="w-18">
+                          <span className="text-3xs text-slate-400 block font-semibold uppercase">GST %</span>
+                          <select
+                            value={it.gst_rate !== undefined ? it.gst_rate : 5}
+                            onChange={(e) => updateEditInvoiceItem(idx, 'gst_rate', Number(e.target.value))}
+                            className="w-full p-1 border border-slate-300 rounded bg-white text-3xs font-semibold"
+                          >
+                            <option value="0">0%</option>
+                            <option value="5">5%</option>
+                            <option value="12">12%</option>
+                            <option value="18">18%</option>
+                            <option value="28">28%</option>
+                          </select>
+                        </div>
+                      )}
+
+                      <div className="w-20 text-right">
+                        <span className="text-3xs text-slate-400 block font-semibold uppercase">Total (₹)</span>
+                        <span className="font-bold text-slate-800 text-xs block pt-1">
+                          ₹{Number(it.total_amount || 0).toFixed(2)}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeEditInvoiceItem(idx)}
+                        className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition"
+                        title="Delete this item"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Live Recalculated Summary Bar */}
+            <div className="bg-emerald-50/70 p-3.5 rounded-xl border border-emerald-200 text-xs flex flex-wrap items-center justify-between gap-3">
+              <div className="flex space-x-4 text-slate-600">
+                <span>Taxable Value: <strong className="font-mono">₹{Number(editInvoice.taxable_value || 0).toFixed(2)}</strong></span>
+                {editInvoice.is_gst_bill && (
+                  <span>GST Total: <strong className="font-mono">₹{Number((editInvoice.cgst_amount || 0) + (editInvoice.sgst_amount || 0)).toFixed(2)}</strong></span>
+                )}
+              </div>
+              <div className="text-sm font-black text-emerald-900">
+                Grand Total: ₹{Number(editInvoice.grand_total || 0).toFixed(2)}
+              </div>
+            </div>
+
+            <div className="flex space-x-2 pt-2">
               <button
                 onClick={handleSaveEditedInvoice}
-                className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl text-xs"
+                className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-3 rounded-xl text-xs shadow transition flex items-center justify-center space-x-1.5"
               >
-                Save Changes
+                <Check className="w-4 h-4" />
+                <span>Save All Changes to Invoice & Stock</span>
               </button>
               <button
                 onClick={() => setEditInvoice(null)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-4 py-2.5 rounded-xl text-xs"
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-5 py-3 rounded-xl text-xs"
               >
                 Cancel
               </button>
