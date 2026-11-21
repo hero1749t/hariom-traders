@@ -5,13 +5,19 @@ import {
   FileText, CheckSquare, Users, Search, Plus, Trash2, Printer, 
   RefreshCw, CheckCircle2, Phone, MapPin, ShieldCheck, ChevronRight,
   TrendingUp, IndianRupee, Layers, Clock, AlertCircle, Barcode, Calendar,
-  Camera, UploadCloud, FileCheck, Check, Sparkles, Eye, Edit, X
+  Camera, UploadCloud, FileCheck, Check, Sparkles, Eye, Edit, X, Key, Settings
 } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [userRole, setUserRole] = useState('Owner'); // 'Owner', 'Billing Staff', 'Stock Staff'
   const [loading, setLoading] = useState(true);
+
+  // Gemini Vision AI & Dual Pricing Settings
+  const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('hariom_gemini_api_key') || '');
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [tempApiKey, setTempApiKey] = useState(geminiApiKey);
+  const [posPriceMode, setPosPriceMode] = useState('RETAIL'); // 'RETAIL' or 'WHOLESALE'
 
   // Core Data States
   const [dashboard, setDashboard] = useState(null);
@@ -267,27 +273,132 @@ export default function App() {
         mathCheck: { isValid: true }
       };
     }
-    // Default Jindal Agencies
+    // Clean Blank Bill Template for any new or unrecognized bill (NO FAKE JINDAL DATA!)
     return {
-      supplier_name: 'Jindal Agencies',
-      supplier_gstin: '05ABAPA2921P1ZY',
-      invoice_number: '2186',
-      invoice_date: '2026-10-18',
+      supplier_name: '',
+      supplier_gstin: '',
+      invoice_number: `INV-${Date.now().toString().slice(-4)}`,
+      invoice_date: new Date().toISOString().split('T')[0],
       buyer_name: 'SHREE HARI OM TRADERS',
       buyer_gstin: '05DKWPS9122N1Z5',
+      is_gst_bill: 1,
       items: [
-        { raw_name: 'Kashmiri 10/-', product_name: 'MDH Kashmiri Mirch Powder ₹10', hsn_code: '09101210', quantity: 5, unit: 'UNIT', rate: 133.33, taxable_value: 666.65, gst_rate: 5, cgst: 16.67, sgst: 16.67, total_amount: 700.00, destination_location_id: 'loc-main' },
-        { raw_name: 'Kitchen King 10/-', product_name: 'Kitchen King Masala ₹10', hsn_code: '09101210', quantity: 2, unit: 'UNIT', rate: 133.33, taxable_value: 266.66, gst_rate: 5, cgst: 6.67, sgst: 6.67, total_amount: 280.00, destination_location_id: 'loc-main' },
-        { raw_name: 'Double Engine Det. Powder 1kg', product_name: 'Double Engine Detergent Powder 1kg', hsn_code: '34021200', quantity: 1, unit: 'BAG', rate: 1652.54, taxable_value: 1652.54, gst_rate: 18, cgst: 148.73, sgst: 148.73, total_amount: 1950.00, destination_location_id: 'loc-godown' }
+        { raw_name: '', product_name: '', category: 'General', quantity: 1, unit: 'PCS', rate: 0, taxable_value: 0, gst_rate: 5, cgst: 0, sgst: 0, wholesale_price: 0, retail_price: 0, total_amount: 0, destination_location_id: 'loc-main' }
       ],
-      subtotal: 4852.47,
-      total_cgst: 228.74,
-      total_sgst: 228.74,
+      subtotal: 0,
+      total_cgst: 0,
+      total_sgst: 0,
       total_igst: 0,
-      round_off: 0.05,
-      grand_total: 5310.00,
+      round_off: 0,
+      grand_total: 0,
       mathCheck: { isValid: true }
     };
+  };
+
+  const callGeminiInvoiceOCR = async (file, apiKey) => {
+    const base64Data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const res = reader.result;
+        resolve(res.includes(',') ? res.split(',')[1] : res);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    const mimeType = file.type || 'image/jpeg';
+    const promptText = `Extract Indian GST or Cash Memo invoice data from this image.
+Return ONLY valid JSON (no markdown backticks, no text) with this structure:
+{
+  "supplier_name": "Supplier / Vendor Name",
+  "supplier_gstin": "15-digit GSTIN or empty if cash memo",
+  "invoice_number": "Bill/Invoice Number",
+  "invoice_date": "YYYY-MM-DD",
+  "is_gst_bill": true,
+  "items": [
+    {
+      "product_name": "Product Name",
+      "category": "Spices / Confectionery / Detergent / Wholesale / Groceries",
+      "quantity": 1,
+      "unit": "PCS",
+      "rate": 100.0,
+      "taxable_value": 100.0,
+      "gst_rate": 5,
+      "cgst": 2.5,
+      "sgst": 2.5,
+      "wholesale_price": 105.0,
+      "retail_price": 115.0,
+      "total_amount": 105.0,
+      "destination_location_id": "loc-main"
+    }
+  ],
+  "subtotal": 100.0,
+  "total_cgst": 2.5,
+  "total_sgst": 2.5,
+  "total_igst": 0,
+  "grand_total": 105.0
+}`;
+
+    const apiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: promptText },
+            { inline_data: { mime_type: mimeType, data: base64Data } }
+          ]
+        }]
+      })
+    });
+
+    const jsonRes = await apiRes.json();
+    const rawText = jsonRes.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!rawText) throw new Error('Empty response from Gemini Vision');
+    const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+    parsed.mathCheck = { isValid: true };
+    return parsed;
+  };
+
+  const handleOpenManualBill = () => {
+    setEditInvoice({
+      id: `purch_${Date.now()}`,
+      isNew: true,
+      is_gst_bill: true,
+      supplier_name: '',
+      supplier_gstin: '',
+      invoice_number: `INV-${Date.now().toString().slice(-4)}`,
+      invoice_date: new Date().toISOString().split('T')[0],
+      items: [
+        {
+          product_name: '',
+          category: 'General',
+          quantity: 1,
+          unit: 'PCS',
+          rate: 0,
+          taxable_value: 0,
+          gst_rate: 5,
+          cgst: 0,
+          sgst: 0,
+          wholesale_price: 0,
+          retail_price: 0,
+          total_amount: 0,
+          destination_location_id: 'loc-main'
+        }
+      ],
+      taxable_value: 0,
+      cgst_amount: 0,
+      sgst_amount: 0,
+      grand_total: 0
+    });
+  };
+
+  const handleSaveApiKey = () => {
+    localStorage.setItem('hariom_gemini_api_key', tempApiKey.trim());
+    setGeminiApiKey(tempApiKey.trim());
+    setShowApiKeyModal(false);
+    alert('Gemini Vision AI Key saved! All invoice scans will now use automated Vision OCR.');
   };
 
   const handleScanUpload = async (e) => {
@@ -298,27 +409,39 @@ export default function App() {
     setIsScanning(true);
     setScanResult(null);
 
-    const formData = new FormData();
-    formData.append('invoice_file', file);
-
     try {
-      const res = await axios.post('/api/purchases/scan', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      if (res.data?.success) {
-        setScanResult(res.data.data);
-      } else {
-        throw new Error('API returned unverified response');
-      }
-    } catch (err) {
-      console.warn('Backend /api/purchases/scan unreachable (e.g. on Vercel), running intelligent local parser:', err);
-      // Run intelligent fallback parser so it NEVER gives 404!
-      setTimeout(() => {
-        const parsed = parseBillFallback(file.name);
+      const apiKey = geminiApiKey || localStorage.getItem('hariom_gemini_api_key');
+      if (apiKey) {
+        const parsed = await callGeminiInvoiceOCR(file, apiKey);
         setScanResult(parsed);
-      }, 700);
+        setIsScanning(false);
+        return;
+      }
+
+      // Try local backend if reachable
+      try {
+        const formData = new FormData();
+        formData.append('invoice_file', file);
+        const res = await axios.post('/api/purchases/scan', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 2500
+        });
+        if (res.data?.success) {
+          setScanResult(res.data.data);
+          setIsScanning(false);
+          return;
+        }
+      } catch (beErr) {
+        // Continue to clean template
+      }
+
+      const parsed = parseBillFallback(file.name);
+      setScanResult(parsed);
+    } catch (err) {
+      console.warn('AI Scan parse exception, loading clean entry form:', err);
+      setScanResult(parseBillFallback(file.name));
     } finally {
-      setTimeout(() => setIsScanning(false), 800);
+      setIsScanning(false);
     }
   };
 
@@ -384,15 +507,73 @@ export default function App() {
   const handleSaveEditedInvoice = async () => {
     if (!editInvoice) return;
     try {
-      await axios.put(`/api/purchases/${editInvoice.id}`, editInvoice);
-      alert('Invoice and items updated successfully!');
+      if (editInvoice.isNew) {
+        await axios.post('/api/purchases', editInvoice);
+      } else {
+        await axios.put(`/api/purchases/${editInvoice.id}`, editInvoice);
+      }
+      alert('Invoice and items saved successfully!');
       setEditInvoice(null);
       fetchAllData();
     } catch (err) {
-      console.warn('API update offline, updating client state:', err);
-      setPurchasesHistory(prev => prev.map(p => p.id === editInvoice.id ? editInvoice : p));
+      console.warn('API update offline, updating client state directly:', err);
+      if (editInvoice.isNew) {
+        setPurchasesHistory([editInvoice, ...purchasesHistory]);
+      } else {
+        setPurchasesHistory(prev => prev.map(p => p.id === editInvoice.id ? editInvoice : p));
+      }
+
+      // Inward into products catalog
+      const updatedProducts = [...products];
+      (editInvoice.items || []).forEach(it => {
+        const prodName = (it.product_name || it.name || '').trim();
+        if (!prodName) return;
+        const existing = updatedProducts.find(p => p.name.toLowerCase() === prodName.toLowerCase());
+        const qty = Math.max(0, Number(it.quantity) || 0);
+        const rate = Math.max(0, Number(it.rate) || 0);
+        const wholesale = Number(it.wholesale_price) || Number((rate * 1.05).toFixed(2));
+        const retail = Number(it.retail_price) || Number((rate * 1.15).toFixed(2));
+        const mrpVal = Number(it.retail_price) || Number((rate * 1.25).toFixed(2));
+
+        if (existing) {
+          existing.total_stock = (existing.total_stock || 0) + qty;
+          if (it.destination_location_id === 'loc-godown') {
+            existing.godown_stock = (existing.godown_stock || 0) + qty;
+          } else {
+            existing.main_shop_stock = (existing.main_shop_stock || 0) + qty;
+          }
+          if (wholesale) existing.wholesale_price = wholesale;
+          if (retail) existing.selling_price = retail;
+        } else {
+          updatedProducts.push({
+            id: `prod_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+            name: prodName,
+            category: it.category || 'General',
+            barcode: `${Date.now()}`.slice(-13),
+            base_unit: it.unit || 'PCS',
+            selling_price: retail,
+            wholesale_price: wholesale,
+            mrp: mrpVal,
+            gst_rate: Number(it.gst_rate) || 5,
+            total_stock: qty,
+            main_shop_stock: it.destination_location_id === 'loc-godown' ? 0 : qty,
+            godown_stock: it.destination_location_id === 'loc-godown' ? qty : 0
+          });
+        }
+      });
+      setProducts(updatedProducts);
+
+      if (dashboard) {
+        setDashboard({
+          ...dashboard,
+          totalProducts: updatedProducts.length,
+          totalQuantity: (dashboard.totalQuantity || 0) + (editInvoice.items || []).reduce((s, it) => s + (Number(it.quantity) || 0), 0),
+          purchaseValuation: Number(((dashboard.purchaseValuation || 0) + (editInvoice.taxable_value || 0)).toFixed(2))
+        });
+      }
+
       setEditInvoice(null);
-      alert('Invoice and items updated in register.');
+      alert('Invoice and items successfully saved & stock inwarded!');
     }
   };
 
@@ -949,16 +1130,38 @@ export default function App() {
                 {/* Left Side: Product Search & Quick Add */}
                 <div className="lg:col-span-7 space-y-4">
                   <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                    <div className="relative">
-                      <Search className="w-5 h-5 text-slate-400 absolute left-3 top-3" />
-                      <input 
-                        type="text"
-                        placeholder="Scan Barcode or Search by Product Name / Category..."
-                        value={posSearch}
-                        onChange={(e) => setPosSearch(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-emerald-600"
-                        autoFocus
-                      />
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                        <span className="text-xs font-bold text-slate-600">Active Billing Rate:</span>
+                        <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+                          <button
+                            type="button"
+                            onClick={() => setPosPriceMode('RETAIL')}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 ${posPriceMode === 'RETAIL' ? 'bg-emerald-700 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                          >
+                            <span>Retail (Counter MRP)</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPosPriceMode('WHOLESALE')}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 ${posPriceMode === 'WHOLESALE' ? 'bg-blue-700 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                          >
+                            <span>Wholesale (Bulk Rate)</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="relative">
+                        <Search className="w-5 h-5 text-slate-400 absolute left-3 top-3" />
+                        <input 
+                          type="text"
+                          placeholder="Scan Barcode or Search by Product Name / Category..."
+                          value={posSearch}
+                          onChange={(e) => setPosSearch(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-emerald-600"
+                          autoFocus
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -1166,27 +1369,69 @@ export default function App() {
             {/* ========================================================= */}
             {activeTab === 'scan' && (
               <div className="space-y-6">
-                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <Sparkles className="w-5 h-5 text-amber-500" />
-                      <h3 className="font-bold text-slate-800 text-base">Mobile AI Purchase Bill Scanner</h3>
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <Sparkles className="w-5 h-5 text-amber-500" />
+                        <h3 className="font-bold text-slate-800 text-base">Purchase Inwarding & Bill Center</h3>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Inward purchase bills manually or auto-extract with Gemini Vision AI (Marg, Tally, Busy, Cash Memos).
+                      </p>
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Capture supplier invoice photo from phone or upload PDF. AI extracts lines & taxes with mandatory human verification before inventory commit.
-                    </p>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button 
+                        type="button"
+                        onClick={handleOpenManualBill}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow transition flex items-center space-x-1.5 cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>+ Manual Bill Entry</span>
+                      </button>
+
+                      <label className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow cursor-pointer flex items-center space-x-1.5 transition">
+                        <Camera className="w-4 h-4" />
+                        <span>Scan / Upload Bill</span>
+                        <input 
+                          type="file" 
+                          accept="image/*,.pdf" 
+                          capture="environment" 
+                          onChange={handleScanUpload} 
+                          className="hidden" 
+                        />
+                      </label>
+
+                      <button 
+                        type="button"
+                        onClick={() => setShowApiKeyModal(true)}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3 py-2.5 rounded-xl border border-slate-300 flex items-center space-x-1 transition cursor-pointer"
+                        title="Configure Gemini Vision AI Key"
+                      >
+                        <Key className="w-3.5 h-3.5 text-amber-600" />
+                        <span>AI Key</span>
+                      </button>
+                    </div>
                   </div>
-                  <label className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow cursor-pointer flex items-center space-x-2">
-                    <Camera className="w-4 h-4" />
-                    <span>Scan / Upload New Bill</span>
-                    <input 
-                      type="file" 
-                      accept="image/*,.pdf" 
-                      capture="environment" 
-                      onChange={handleScanUpload} 
-                      className="hidden" 
-                    />
-                  </label>
+
+                  {/* AI & Dynamic Inward Status Pill */}
+                  <div className="flex flex-wrap items-center justify-between text-2xs pt-2 border-t border-slate-100 text-slate-500 gap-2">
+                    <div className="flex items-center space-x-2">
+                      {geminiApiKey ? (
+                        <span className="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full flex items-center">
+                          <Check className="w-3 h-3 mr-1" /> Gemini Vision 1.5 Flash Active (Auto-OCR)
+                        </span>
+                      ) : (
+                        <span className="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full flex items-center">
+                          <AlertCircle className="w-3 h-3 mr-1" /> Manual / Standard OCR Mode (Click "AI Key" for 100% Auto-Scan)
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-slate-400">
+                      Standard: <strong>October 2026 Baseline</strong> • GSTIN: <span className="font-mono text-emerald-700">05DKWPS9122N1Z5</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Live Scanning Loader */}
@@ -2280,6 +2525,83 @@ export default function App() {
                 className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-5 py-2.5 rounded-xl text-xs"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 5: GEMINI VISION AI CONFIGURATION MODAL              */}
+      {/* ========================================================= */}
+      {showApiKeyModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2">
+                <Key className="w-5 h-5 text-amber-500" />
+                <h4 className="font-bold text-slate-800 text-base">Gemini Vision AI Configuration</h4>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowApiKeyModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-600 space-y-2">
+              <p>
+                Connect your free <strong>Google AI Studio Gemini API Key</strong> to enable 100% automated OCR & multi-line item extraction for any invoice layout (Marg ERP, Busy, Tally, photo or PDF).
+              </p>
+              <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-200 text-2xs text-amber-800">
+                ⚡ <strong>Free Tier:</strong> Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="underline font-bold text-blue-700">aistudio.google.com</a>. The key is securely stored in your local browser only.
+              </div>
+            </div>
+
+            <div>
+              <label className="text-2xs font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                Gemini API Key
+              </label>
+              <input 
+                type="password"
+                value={tempApiKey}
+                onChange={(e) => setTempApiKey(e.target.value)}
+                placeholder="AIzaSy..."
+                className="w-full p-2.5 border border-slate-300 rounded-xl font-mono text-xs bg-slate-50 focus:bg-white focus:border-emerald-600 outline-none"
+              />
+            </div>
+
+            <div className="flex space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={handleSaveApiKey}
+                className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl text-xs shadow transition flex items-center justify-center space-x-1.5 cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                <span>Save API Key</span>
+              </button>
+              {geminiApiKey && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.removeItem('hariom_gemini_api_key');
+                    setGeminiApiKey('');
+                    setTempApiKey('');
+                    alert('API Key cleared. Switched back to Standard/Manual Mode.');
+                  }}
+                  className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold px-3 py-2.5 rounded-xl text-xs border border-rose-200 cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowApiKeyModal(false)}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-4 py-2.5 rounded-xl text-xs cursor-pointer"
+              >
+                Cancel
               </button>
             </div>
           </div>

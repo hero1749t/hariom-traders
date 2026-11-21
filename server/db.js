@@ -349,17 +349,17 @@ function seedInitialData() {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
+  // Real Inwarded Products from October 2026 Baseline
   const productsData = [
-    ['prod-1', 'Tata Salt Vacuum Evaporated 1kg', 'Tata', 'Groceries', 'Salt & Sugar', '8901030383794', 'TATASALT-1KG', '2501', 'PKT', 'CARTON', 24, 21.50, 26.00, 28.00, 5, 'sup-1', 20, 150, 35],
-    ['prod-2', 'Fortune Sunlite Refined Sunflower Oil 1L', 'Fortune', 'Oils & Ghee', 'Edible Oil', '8906007280053', 'FORTUNE-SUN-1L', '1512', 'POUCH', 'CARTON', 12, 115.00, 135.00, 145.00, 5, 'sup-1', 15, 80, 25],
-    ['prod-3', 'Aashirvaad Shudh Chakki Atta 5kg', 'Aashirvaad', 'Groceries', 'Flours', '8901058852326', 'AASHIR-ATTA-5KG', '1101', 'BAG', 'BAG', 1, 210.00, 245.00, 260.00, 0, 'sup-1', 10, 50, 18],
-    ['prod-4', 'MDH Deggi Mirch Powder 100g', 'MDH', 'Spices & Masala', 'Powder Spices', '8901967200119', 'MDH-DEGGI-100G', '0910', 'BOX', 'CARTON', 20, 68.00, 82.00, 90.00, 5, 'sup-2', 12, 60, 20],
-    ['prod-5', 'Everest Garam Masala 100g', 'Everest', 'Spices & Masala', 'Blended Spices', '8901786111025', 'EVR-GARAM-100G', '0910', 'BOX', 'CARTON', 20, 72.00, 88.00, 95.00, 5, 'sup-2', 15, 60, 22],
-    ['prod-6', 'Dettol Original Germ Protection Soap 125g (Buy 3 Get 1)', 'Dettol', 'Personal Care', 'Soaps', '8901396123456', 'DETTOL-125G-4PK', '3401', 'PACK', 'CARTON', 18, 142.00, 175.00, 190.00, 18, 'sup-3', 8, 40, 15],
-    ['prod-7', 'Colgate Strong Teeth Dental Cream 200g', 'Colgate', 'Personal Care', 'Oral Care', '8901314010545', 'COLGATE-200G', '3306', 'TUBE', 'BOX', 12, 92.00, 115.00, 125.00, 18, 'sup-3', 10, 50, 18],
-    ['prod-8', 'Surf Excel Easy Wash Detergent Powder 1kg', 'Surf Excel', 'Cleaning & Hygiene', 'Fabric Wash', '8901030704414', 'SURF-EASY-1KG', '3402', 'PKT', 'CARTON', 12, 118.00, 138.00, 150.00, 18, 'sup-3', 15, 60, 25],
-    ['prod-9', 'Parle-G Gold Glucose Biscuits 1kg', 'Parle', 'Packaged Foods', 'Biscuits', '8901719102031', 'PARLE-G-1KG', '1905', 'PKT', 'CARTON', 10, 84.00, 102.00, 110.00, 18, 'sup-1', 12, 50, 20],
-    ['prod-10', 'Nestle Maggi 2-Minute Noodles Masala 70g (Pack of 12)', 'Maggi', 'Packaged Foods', 'Noodles', '8901058861236', 'MAGGI-70G-12PK', '1902', 'PACK', 'CARTON', 8, 145.00, 170.00, 180.00, 12, 'sup-1', 10, 45, 18]
+    ['prod-1', 'MDH Kashmiri Mirch Powder 100g', 'MDH', 'Spices & Masala', 'Powder Spices', '8901967200119', 'MDH-KASHMIRI-100G', '0910', 'UNIT', 'BOX', 1, 133.33, 153.33, 166.66, 5, 'sup-1', 2, 20, 5],
+    ['prod-2', 'Kitchen King Masala 100g', 'MDH', 'Spices & Masala', 'Blended Spices', '8901967200225', 'MDH-KKING-100G', '0910', 'UNIT', 'BOX', 1, 133.33, 153.33, 166.66, 5, 'sup-1', 2, 15, 4],
+    ['prod-3', 'Double Engine Detergent Powder 1kg', 'Double Engine', 'Cleaning & Hygiene', 'Detergent', '8906001230012', 'DBL-ENG-1KG', '3402', 'BAG', 'BAG', 1, 1652.54, 1900.42, 2065.00, 18, 'sup-1', 1, 10, 2],
+    ['prod-4', 'Cadbury Dairy Milk Chocolate ₹10', 'Cadbury', 'Confectionery', 'Chocolates', '7622201140023', 'CAD-DM-10', '1806', 'BOX', 'BOX', 1, 484.77, 557.49, 605.96, 5, 'sup-2', 2, 15, 6],
+    ['prod-5', 'Cadbury Dairy Milk Chocolate ₹45', 'Cadbury', 'Confectionery', 'Chocolates', '7622201140047', 'CAD-DM-45', '1806', 'BOX', 'BOX', 1, 1147.97, 1320.17, 1434.96, 5, 'sup-2', 2, 10, 4],
+    ['prod-6', 'Oreo Choco Cream Biscuit ₹10', 'Cadbury', 'Biscuits', 'Cream Biscuits', '7622201140085', 'OREO-10', '1905', 'PCS', 'BOX', 1, 8.66, 9.96, 10.82, 5, 'sup-2', 10, 100, 30],
+    ['prod-7', 'Hridayram Kaju Patishta 400g (Box)', 'Hridayram', 'Sweets & Festive', 'Mithai', '8906002340011', 'HR-KAJU-400G', '2106', 'CASE', 'CASE', 1, 2190.48, 2519.05, 2738.10, 5, 'sup-3', 1, 5, 2],
+    ['prod-8', 'Hridayram Gulab Jamun 1kg (12 Box)', 'Hridayram', 'Sweets & Festive', 'Mithai', '8906002340028', 'HR-GJAMUN-1KG', '2106', 'CASE', 'CASE', 1, 1600.00, 1840.00, 2000.00, 5, 'sup-3', 1, 5, 2],
+    ['prod-9', 'HR Kachri Scheme Big (8 Bags)', 'Hridayram', 'Snacks & Namkeen', 'Namkeen', '8906002340035', 'HR-KACHRI-BIG', '1905', 'BAG', 'BAG', 1, 982.10, 1129.41, 1227.62, 5, 'sup-3', 2, 15, 4]
   ];
 
   for (const p of productsData) {
