@@ -229,7 +229,7 @@ export default function App() {
 
   const parseBillFallback = (filename) => {
     const fn = (filename || '').toLowerCase();
-    if (fn.includes('43') || fn.includes('krishna')) {
+    if (fn.includes('krishna')) {
       return {
         supplier_name: 'KRISHNA AGENCIES 26-27',
         supplier_gstin: '05AEJPC9715K1ZD',
@@ -251,7 +251,7 @@ export default function App() {
         mathCheck: { isValid: true }
       };
     }
-    if (fn.includes('45') || fn.includes('vijaya') || fn.includes('cadbury')) {
+    if (fn.includes('vijaya') || fn.includes('cadbury')) {
       return {
         supplier_name: 'THE VIJAYA AGENCIES',
         supplier_gstin: '05AFXPJ8419E1Z4',
@@ -307,7 +307,7 @@ export default function App() {
     });
 
     const mimeType = file.type || 'image/jpeg';
-    const promptText = `Extract Indian GST or Cash Memo invoice data from this image.
+    const promptText = `Extract Indian wholesale/retail invoice, GST tax bill, cash memo, or handwritten shop counter bill from this image. Adaptively identify items, rates, quantities, and totals.
 Return ONLY valid JSON (no markdown backticks, no text) with this structure:
 {
   "supplier_name": "Supplier / Vendor Name",
