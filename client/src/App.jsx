@@ -205,7 +205,7 @@ export default function App() {
   },
   {
     "id": "prod_1794741699253_0",
-    "name": "Hridayram Kaju Patishta 400g (Box)",
+    "name": "Fortune Kachi Ghani Mustard Oil 1L",
     "brand": null,
     "category": "Groceries",
     "subcategory": "General",
@@ -220,7 +220,7 @@ export default function App() {
   },
   {
     "id": "prod_1794741699253_1",
-    "name": "Hridayram Gulab Jamun 1kg (12 Box)",
+    "name": "Fortune Sunlite Refined Oil 1L",
     "brand": null,
     "category": "Groceries",
     "subcategory": "General",
@@ -235,7 +235,7 @@ export default function App() {
   },
   {
     "id": "prod_1794741699253_2",
-    "name": "HR Kachri Scheme Big (8 Bags)",
+    "name": "Surf Excel 10-Rupee Pouch (1 Dozen)",
     "brand": null,
     "category": "Groceries",
     "subcategory": "General",
@@ -1443,9 +1443,9 @@ export default function App() {
           grand_total: 16410.00,
           verification_status: 'VERIFIED',
           items: [
-            { product_name: 'Hridayram Kaju Patishta 400g (Box)', quantity: 1, unit: 'CASE', rate: 2190.48, taxable_value: 2190.48, gst_rate: 5, total_amount: 2300.00 },
-            { product_name: 'Hridayram Gulab Jamun 1kg (12 Box)', quantity: 1, unit: 'CASE', rate: 1600.00, taxable_value: 1600.00, gst_rate: 5, total_amount: 1680.00 },
-            { product_name: 'HR Kachri Scheme Big (8 Bags)', quantity: 8, unit: 'BAG', rate: 982.10, taxable_value: 7856.80, gst_rate: 5, total_amount: 8249.64 }
+            { product_name: 'Fortune Kachi Ghani Mustard Oil 1L', quantity: 1, unit: 'CASE', rate: 2190.48, taxable_value: 2190.48, gst_rate: 5, total_amount: 2300.00 },
+            { product_name: 'Fortune Sunlite Refined Oil 1L', quantity: 1, unit: 'CASE', rate: 1600.00, taxable_value: 1600.00, gst_rate: 5, total_amount: 1680.00 },
+            { product_name: 'Surf Excel 10-Rupee Pouch (1 Dozen)', quantity: 8, unit: 'BAG', rate: 982.10, taxable_value: 7856.80, gst_rate: 5, total_amount: 8249.64 }
           ]
         },
         {
@@ -1479,52 +1479,7 @@ export default function App() {
   };
 
   const parseBillFallback = (filename) => {
-    const fn = (filename || '').toLowerCase();
-    if (fn.includes('krishna')) {
-      return {
-        supplier_name: 'KRISHNA AGENCIES 26-27',
-        supplier_gstin: '05AEJPC9715K1ZD',
-        invoice_number: 'B284720',
-        invoice_date: '2026-10-20',
-        buyer_name: 'SHREE HARI OM TRADERS',
-        buyer_gstin: '05DKWPS9122N1Z5',
-        items: [
-          { raw_name: 'HRIDAYRAM KAJU PATISHTA 400 GM', product_name: 'Hridayram Kaju Patishta 400g (Box)', hsn_code: '210690', quantity: 1, unit: 'CASE', rate: 2190.48, taxable_value: 2190.48, gst_rate: 5, cgst: 54.76, sgst: 54.76, total_amount: 2300.00, destination_location_id: 'loc-main' },
-          { raw_name: 'HRIDAYRAM GULAB JAMUN 1KG', product_name: 'Hridayram Gulab Jamun 1kg (12 Box)', hsn_code: '210690', quantity: 1, unit: 'CASE', rate: 1600.00, taxable_value: 1600.00, gst_rate: 5, cgst: 40.00, sgst: 40.00, total_amount: 1680.00, destination_location_id: 'loc-main' },
-          { raw_name: 'HR KACHRI SCHEME BIG', product_name: 'HR Kachri Scheme Big (8 Bags)', hsn_code: '21069099', quantity: 8, unit: 'BAG', rate: 982.10, taxable_value: 7856.80, gst_rate: 5, cgst: 196.42, sgst: 196.42, total_amount: 8249.64, destination_location_id: 'loc-godown' }
-        ],
-        subtotal: 15628.23,
-        total_cgst: 390.70,
-        total_sgst: 390.70,
-        total_igst: 0,
-        round_off: 0.37,
-        grand_total: 16410.00,
-        mathCheck: { isValid: true }
-      };
-    }
-    if (fn.includes('vijaya') || fn.includes('cadbury')) {
-      return {
-        supplier_name: 'THE VIJAYA AGENCIES',
-        supplier_gstin: '05AFXPJ8419E1Z4',
-        invoice_number: 'CAD-9373',
-        invoice_date: '2026-11-03',
-        buyer_name: 'SHREE HARI OM TRADERS',
-        buyer_gstin: '05DKWPS9122N1Z5',
-        items: [
-          { raw_name: 'Cadbury D.Milk (MRP 10)', product_name: 'Cadbury Dairy Milk Chocolate ₹10', hsn_code: '18063200', quantity: 6, unit: 'BOX', rate: 484.77, taxable_value: 2908.62, gst_rate: 5, cgst: 72.72, sgst: 72.72, total_amount: 3054.06, destination_location_id: 'loc-main' },
-          { raw_name: 'Cadbury D.Milk (MRP 45)', product_name: 'Cadbury Dairy Milk Chocolate ₹45', hsn_code: '18063200', quantity: 4, unit: 'BOX', rate: 1147.97, taxable_value: 4591.88, gst_rate: 5, cgst: 114.80, sgst: 114.80, total_amount: 4821.48, destination_location_id: 'loc-main' },
-          { raw_name: 'Cadbury Oreo Choco Biscuit (MRP 10)', product_name: 'Oreo Choco Cream Biscuit ₹10', hsn_code: '19053100', quantity: 60, unit: 'PCS', rate: 8.66, taxable_value: 519.60, gst_rate: 5, cgst: 12.99, sgst: 12.99, total_amount: 545.58, destination_location_id: 'loc-main' }
-        ],
-        subtotal: 11716.90,
-        total_cgst: 292.92,
-        total_sgst: 292.92,
-        total_igst: 0,
-        round_off: 0.26,
-        grand_total: 12303.00,
-        mathCheck: { isValid: true }
-      };
-    }
-    // Clean Blank Bill Template for any new or unrecognized bill (NO FAKE JINDAL DATA!)
+    // 100% Clean Blank Bill Template (NO mock or fake vendor data)
     return {
       supplier_name: '',
       supplier_gstin: '',
@@ -1534,7 +1489,22 @@ export default function App() {
       buyer_gstin: '05DKWPS9122N1Z5',
       is_gst_bill: 1,
       items: [
-        { raw_name: '', product_name: '', category: 'General', quantity: 1, unit: 'PCS', rate: 0, taxable_value: 0, gst_rate: 5, cgst: 0, sgst: 0, wholesale_price: 0, retail_price: 0, total_amount: 0, destination_location_id: 'loc-main' }
+        {
+          raw_name: '',
+          product_name: '',
+          category: 'Wholesale Grocery (Parchun)',
+          quantity: 1,
+          unit: 'PCS',
+          rate: 0,
+          taxable_value: 0,
+          gst_rate: 5,
+          cgst: 0,
+          sgst: 0,
+          wholesale_price: 0,
+          retail_price: 0,
+          total_amount: 0,
+          destination_location_id: 'loc-main'
+        }
       ],
       subtotal: 0,
       total_cgst: 0,
@@ -1558,20 +1528,21 @@ export default function App() {
     });
 
     const mimeType = file.type || 'image/jpeg';
-    const promptText = `Extract Indian wholesale/retail invoice, GST tax bill, cash memo, or handwritten shop counter bill from this image. Adaptively identify items, rates, quantities, and totals.
-Return ONLY valid JSON (no markdown backticks, no text) with this structure:
+    const promptText = `You are an AI bill reader for an Indian retail & wholesale grocery store (Shree Hari Om Traders).
+Extract invoice details from this bill image (whether computer GST tax invoice, cash memo, or handwritten counter parcha).
+Return ONLY valid JSON (no markdown formatting, no text before or after), with exact keys:
 {
-  "supplier_name": "Supplier / Vendor Name",
-  "supplier_gstin": "15-digit GSTIN or empty if cash memo",
+  "supplier_name": "Supplier / Vendor / Agency Name",
+  "supplier_gstin": "15-digit GSTIN or blank",
   "invoice_number": "Bill/Invoice Number",
   "invoice_date": "YYYY-MM-DD",
   "is_gst_bill": true,
   "items": [
     {
       "product_name": "Product Name",
-      "category": "Spices / Confectionery / Detergent / Wholesale / Groceries",
+      "category": "Wholesale Beedi & Tobacco / Cigarettes & Smoking / Wholesale Grocery (Parchun) / Wholesale Ration & Grains / General",
       "quantity": 1,
-      "unit": "PCS",
+      "unit": "PCS / PKT / BOX / BAG",
       "rate": 100.0,
       "taxable_value": 100.0,
       "gst_rate": 5,
@@ -1590,26 +1561,46 @@ Return ONLY valid JSON (no markdown backticks, no text) with this structure:
   "grand_total": 105.0
 }`;
 
-    const apiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: promptText },
-            { inline_data: { mime_type: mimeType, data: base64Data } }
-          ]
-        }]
-      })
-    });
+    const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    let lastError = null;
 
-    const jsonRes = await apiRes.json();
-    const rawText = jsonRes.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!rawText) throw new Error('Empty response from Gemini Vision');
-    const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-    const parsed = JSON.parse(cleaned);
-    parsed.mathCheck = { isValid: true };
-    return parsed;
+    for (const model of models) {
+      try {
+        const apiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: promptText },
+                { inline_data: { mime_type: mimeType, data: base64Data } }
+              ]
+            }]
+          })
+        });
+
+        const resObj = await apiRes.json();
+        if (!apiRes.ok || resObj.error) {
+          lastError = new Error(resObj.error?.message || `HTTP ${apiRes.status}`);
+          continue;
+        }
+
+        const rawText = resObj.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawText) {
+          const firstBrace = rawText.indexOf('{');
+          const lastBrace = rawText.lastIndexOf('}');
+          if (firstBrace !== -1 && lastBrace !== -1) {
+            const parsed = JSON.parse(rawText.slice(firstBrace, lastBrace + 1));
+            parsed.mathCheck = { isValid: true };
+            return parsed;
+          }
+        }
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    throw lastError || new Error('Gemini Vision could not parse this bill image.');
   };
 
   const handleOpenManualBill = () => {
