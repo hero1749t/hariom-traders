@@ -3915,6 +3915,15 @@ const handleOpenManualBill = () => {
             <div className="flex space-x-2 pt-2">
               <button
                 type="button"
+                onClick={handleTestApiKey}
+                disabled={isTestingKey}
+                className="bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold px-3.5 py-2.5 rounded-xl text-xs border border-amber-300 transition flex items-center justify-center space-x-1 cursor-pointer"
+              >
+                {isTestingKey ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
+                <span>{isTestingKey ? 'Testing...' : 'Test Key'}</span>
+              </button>
+              <button
+                type="button"
                 onClick={handleSaveApiKey}
                 className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl text-xs shadow transition flex items-center justify-center space-x-1.5 cursor-pointer"
               >
