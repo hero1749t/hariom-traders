@@ -17,6 +17,7 @@ export default function App() {
   const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('hariom_gemini_api_key') || '');
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [tempApiKey, setTempApiKey] = useState(geminiApiKey);
+  const [isTestingKey, setIsTestingKey] = useState(false);
   const [posPriceMode, setPosPriceMode] = useState('RETAIL'); // 'RETAIL' or 'WHOLESALE'
 
   // Core Data States
@@ -1516,21 +1517,79 @@ export default function App() {
     };
   };
 
-  const callGeminiInvoiceOCR = async (file, apiKey) => {
-    const base64Data = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const res = reader.result;
-        resolve(res.includes(',') ? res.split(',')[1] : res);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+  
+  const compressImageForOCR = async (file) => {
+    return new Promise((resolve) => {
+      if (file.type === 'application/pdf') {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const res = reader.result;
+          resolve({
+            mimeType: 'application/pdf',
+            base64Data: res.includes(',') ? res.split(',')[1] : res
+          });
+        };
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+        return;
+      }
 
-    const mimeType = file.type || 'image/jpeg';
-    const promptText = `You are an AI bill reader for an Indian retail & wholesale grocery store (Shree Hari Om Traders).
-Extract invoice details from this bill image (whether computer GST tax invoice, cash memo, or handwritten counter parcha).
-Return ONLY valid JSON (no markdown formatting, no text before or after), with exact keys:
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const maxDim = 1600;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+        resolve({
+          mimeType: 'image/jpeg',
+          base64Data: dataUrl.split(',')[1]
+        });
+      };
+      img.onerror = () => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const res = reader.result;
+          resolve({
+            mimeType: file.type || 'image/jpeg',
+            base64Data: res.includes(',') ? res.split(',')[1] : res
+          });
+        };
+        reader.readAsDataURL(file);
+      };
+      img.src = url;
+    });
+  };
+
+  const callGeminiInvoiceOCR = async (file, apiKey) => {
+    const compressed = await compressImageForOCR(file);
+    if (!compressed || !compressed.base64Data) {
+      throw new Error('Image file read karne mein samasya aayi.');
+    }
+
+    const promptText = `You are an expert Indian billing assistant for Shree Hari Om Traders.
+Extract all invoice data from this image (whether computer printed GST bill, cash memo, or handwritten shop counter slip).
+Return ONLY a valid JSON object (no markdown, no backticks, no comments) with this exact schema:
 {
   "supplier_name": "Supplier / Vendor / Agency Name",
   "supplier_gstin": "15-digit GSTIN or blank",
@@ -1539,7 +1598,7 @@ Return ONLY valid JSON (no markdown formatting, no text before or after), with e
   "is_gst_bill": true,
   "items": [
     {
-      "product_name": "Product Name",
+      "product_name": "Product Name with weight/packing",
       "category": "Wholesale Beedi & Tobacco / Cigarettes & Smoking / Wholesale Grocery (Parchun) / Wholesale Ration & Grains / General",
       "quantity": 1,
       "unit": "PCS / PKT / BOX / BAG",
@@ -1561,7 +1620,14 @@ Return ONLY valid JSON (no markdown formatting, no text before or after), with e
   "grand_total": 105.0
 }`;
 
-    const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    // Prioritize Gemini 1.5 Flash as requested
+    const models = [
+      'gemini-1.5-flash',
+      'gemini-1.5-flash-latest',
+      'gemini-2.0-flash',
+      'gemini-1.5-pro'
+    ];
+
     let lastError = null;
 
     for (const model of models) {
@@ -1573,15 +1639,26 @@ Return ONLY valid JSON (no markdown formatting, no text before or after), with e
             contents: [{
               parts: [
                 { text: promptText },
-                { inline_data: { mime_type: mimeType, data: base64Data } }
+                {
+                  inlineData: {
+                    mimeType: compressed.mimeType,
+                    data: compressed.base64Data
+                  }
+                }
               ]
-            }]
+            }],
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: "application/json"
+            }
           })
         });
 
         const resObj = await apiRes.json();
         if (!apiRes.ok || resObj.error) {
-          lastError = new Error(resObj.error?.message || `HTTP ${apiRes.status}`);
+          const errMsg = resObj.error?.message || `HTTP ${apiRes.status}`;
+          lastError = new Error(errMsg);
+          console.warn(`Model ${model} returned error:`, errMsg);
           continue;
         }
 
@@ -1597,13 +1674,42 @@ Return ONLY valid JSON (no markdown formatting, no text before or after), with e
         }
       } catch (err) {
         lastError = err;
+        console.warn(`Error calling ${model}:`, err);
       }
     }
 
-    throw lastError || new Error('Gemini Vision could not parse this bill image.');
+    throw lastError || new Error('Gemini Vision is bill ko parse nahi kar paya. Kripya image quality check karein.');
   };
 
-  const handleOpenManualBill = () => {
+
+  const handleTestApiKey = async () => {
+    const keyToTest = (tempApiKey || geminiApiKey || '').trim();
+    if (!keyToTest) {
+      alert('Kripya pehle Gemini API key enter karein!');
+      return;
+    }
+    setIsTestingKey(true);
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${keyToTest}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: 'Hello, respond with OK.' }] }]
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error?.message || `HTTP ${res.status}`);
+      }
+      alert('🎉 Gemini 1.5 Flash API Key is 100% VALID and connected! Ab aap koi bhi bill scan kar sakte hain.');
+    } catch (err) {
+      alert(`❌ API Key Test Failed:\n${err.message}\n\nGoogle AI Studio (aistudio.google.com) se apni valid key copy karke yahan paste karein.`);
+    } finally {
+      setIsTestingKey(false);
+    }
+  };
+
+const handleOpenManualBill = () => {
     setEditInvoice({
       id: `purch_${Date.now()}`,
       isNew: true,
@@ -1651,36 +1757,27 @@ Return ONLY valid JSON (no markdown formatting, no text before or after), with e
     setIsScanning(true);
     setScanResult(null);
 
+    const apiKey = (geminiApiKey || localStorage.getItem('hariom_gemini_api_key') || '').trim();
+
+    if (!apiKey) {
+      setIsScanning(false);
+      alert('⚠️ Gemini API Key set nahi hai!\n\nHeader mein "AI Key" button par click karein aur apni Google Gemini API key enter karein.');
+      setShowApiKeyModal(true);
+      setScanResult(parseBillFallback(file.name));
+      return;
+    }
+
     try {
-      const apiKey = geminiApiKey || localStorage.getItem('hariom_gemini_api_key');
-      if (apiKey) {
-        const parsed = await callGeminiInvoiceOCR(file, apiKey);
+      const parsed = await callGeminiInvoiceOCR(file, apiKey);
+      if (parsed && parsed.items && parsed.items.length > 0) {
         setScanResult(parsed);
-        setIsScanning(false);
-        return;
+        alert(`✅ Gemini 1.5 Flash ne ${parsed.items.length} items successfully extract kar liye hain! Details neeche form mein check aur confirm karein.`);
+      } else {
+        throw new Error('Gemini Vision se 0 items extract huye.');
       }
-
-      // Try local backend if reachable
-      try {
-        const formData = new FormData();
-        formData.append('invoice_file', file);
-        const res = await axios.post('/api/purchases/scan', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 2500
-        });
-        if (res.data?.success) {
-          setScanResult(res.data.data);
-          setIsScanning(false);
-          return;
-        }
-      } catch (beErr) {
-        // Continue to clean template
-      }
-
-      const parsed = parseBillFallback(file.name);
-      setScanResult(parsed);
     } catch (err) {
-      console.warn('AI Scan parse exception, loading clean entry form:', err);
+      console.error('AI Scan Error:', err);
+      alert(`⚠️ Gemini Vision Scan Error:\n${err.message}\n\nKripya "AI Key" modal mein apni key verify karein ya details manual entry form mein bharein.`);
       setScanResult(parseBillFallback(file.name));
     } finally {
       setIsScanning(false);
