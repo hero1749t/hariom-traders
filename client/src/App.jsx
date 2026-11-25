@@ -39,6 +39,12 @@ export default function App() {
   // POS State
   const [cart, setCart] = useState([]);
   const [posSearch, setPosSearch] = useState('');
+  const [posCategory, setPosCategory] = useState('ALL');
+  const [showCustomItemModal, setShowCustomItemModal] = useState(false);
+  const [customItem, setCustomItem] = useState({ name: '', price: '', quantity: 1, unit: 'PCS' });
+  const [inventoryFilter, setInventoryFilter] = useState('ALL'); // ALL, PRICED, UNPRICED
+  const [showMobileCart, setShowMobileCart] = useState(false);
+  const [completedSaleBill, setCompletedSaleBill] = useState(null);
   const [paymentMode, setPaymentMode] = useState('CASH');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -1581,7 +1587,7 @@ export default function App() {
     });
   };
 
-  const callGeminiInvoiceOCR = async (file, apiKey) => {
+    const callGeminiInvoiceOCR = async (file, apiKey) => {
     const compressed = await compressImageForOCR(file);
     if (!compressed || !compressed.base64Data) {
       throw new Error('Image file read karne mein samasya aayi.');
@@ -1620,17 +1626,30 @@ Return ONLY a valid JSON object (no markdown, no backticks, no comments) with th
   "grand_total": 105.0
 }`;
 
-    // Prioritize Gemini 1.5 Flash as requested
-    const models = [
-      'gemini-1.5-flash',
-      'gemini-1.5-flash-latest',
-      'gemini-2.0-flash',
-      'gemini-1.5-pro'
-    ];
+    // Step 1: Discover available models for this specific API key
+    let candidateModels = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-2.0-flash', 'gemini-2.5-flash'];
+    try {
+      const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      const listData = await listRes.json();
+      if (listData.models && Array.isArray(listData.models)) {
+        const genModels = listData.models
+          .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+          .map(m => m.name.replace('models/', ''));
+        // Prioritize flash models
+        const flashModels = genModels.filter(m => m.includes('flash'));
+        if (flashModels.length > 0) {
+          candidateModels = [...flashModels, ...genModels];
+        } else if (genModels.length > 0) {
+          candidateModels = genModels;
+        }
+      }
+    } catch (e) {
+      console.warn('ListModels failed, falling back to default model list:', e);
+    }
 
     let lastError = null;
 
-    for (const model of models) {
+    for (const model of candidateModels) {
       try {
         const apiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
           method: 'POST',
@@ -1648,8 +1667,7 @@ Return ONLY a valid JSON object (no markdown, no backticks, no comments) with th
               ]
             }],
             generationConfig: {
-              temperature: 0.1,
-              responseMimeType: "application/json"
+              temperature: 0.1
             }
           })
         });
@@ -1680,7 +1698,6 @@ Return ONLY a valid JSON object (no markdown, no backticks, no comments) with th
 
     throw lastError || new Error('Gemini Vision is bill ko parse nahi kar paya. Kripya image quality check karein.');
   };
-
 
   const handleTestApiKey = async () => {
     const keyToTest = (tempApiKey || geminiApiKey || '').trim();
@@ -2038,16 +2055,18 @@ const handleOpenManualBill = () => {
 
   // POS Add to Cart
   const addToCart = (product) => {
-    if (product.total_stock <= 0) {
-      alert(`${product.name} is currently OUT OF STOCK!`);
-      return;
+    let unitPrice = posPriceMode === 'WHOLESALE' 
+      ? (Number(product.wholesale_price) || Number(product.selling_price) || 0)
+      : (Number(product.selling_price) || Number(product.mrp) || 0);
+
+    if (unitPrice === 0) {
+      const entered = prompt(`${product.name} ka sales rate set nahi hai. Kripya customer ke liye selling rate (₹) enter karein:`, '100');
+      if (entered === null) return;
+      unitPrice = Number(entered) || 0;
     }
+
     const existing = cart.find(item => item.product_id === product.id);
     if (existing) {
-      if (existing.quantity + 1 > product.total_stock) {
-        alert(`Only ${product.total_stock} ${product.base_unit} available in stock!`);
-        return;
-      }
       setCart(cart.map(item => 
         item.product_id === product.id ? { ...item, quantity: item.quantity + 1 } : item
       ));
@@ -2055,12 +2074,13 @@ const handleOpenManualBill = () => {
       setCart([...cart, {
         product_id: product.id,
         name: product.name,
-        selling_price: product.selling_price,
-        mrp: product.mrp,
-        gst_rate: product.gst_rate,
-        base_unit: product.base_unit,
+        selling_price: unitPrice,
+        wholesale_price: Number(product.wholesale_price) || unitPrice,
+        mrp: Number(product.mrp) || unitPrice,
+        gst_rate: Number(product.gst_rate) || 0,
+        base_unit: product.base_unit || 'PCS',
         quantity: 1,
-        total_stock: product.total_stock
+        total_stock: product.total_stock || 999
       }]);
     }
   };
@@ -2218,7 +2238,7 @@ const handleOpenManualBill = () => {
               { id: 'dashboard', label: 'Dashboard', icon: Store },
               { id: 'pos', label: 'Counter POS', icon: ShoppingCart },
               { id: 'scan', label: 'AI Bill Scanner', icon: Camera },
-              { id: 'inventory', label: '3-Locations & Racks', icon: Package },
+              { id: 'inventory', label: 'Store Locations & Racks', icon: Package },
               { id: 'expiry', label: 'Expiry & Returns', icon: AlertTriangle, badge: expiryAlerts.length },
               { id: 'reorder', label: 'Smart Reorder', icon: ArrowRightLeft, badge: reorders.filter(r => r.action !== 'NO_ACTION').length },
               { id: 'gst', label: 'GST & Registers', icon: FileText },
@@ -2490,16 +2510,49 @@ const handleOpenManualBill = () => {
                         </div>
                       </div>
 
-                      <div className="relative">
-                        <Search className="w-5 h-5 text-slate-400 absolute left-3 top-3" />
-                        <input 
-                          type="text"
-                          placeholder="Scan Barcode or Search by Product Name / Category..."
-                          value={posSearch}
-                          onChange={(e) => setPosSearch(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-emerald-600"
-                          autoFocus
-                        />
+                      <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 scrollbar-none">
+                        {[
+                          { id: 'ALL', label: '🔥 All Items' },
+                          { id: 'Wholesale Beedi & Tobacco', label: '🌿 Beedi & Khaini' },
+                          { id: 'Cigarettes & Smoking', label: '🚬 Cigarettes' },
+                          { id: 'Wholesale Grocery (Parchun)', label: '🧴 Oils & Soaps' },
+                          { id: 'Wholesale Ration & Grains', label: '🌾 Ration & Grains' },
+                          { id: 'Wholesale Pulses & Daal', label: '🥣 Daal & Pulses' }
+                        ].map(cat => (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => setPosCategory(cat.id)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                              posCategory === cat.id ? 'bg-emerald-800 text-white shadow' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            {cat.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="flex space-x-2">
+                        <div className="relative flex-1">
+                          <Search className="w-5 h-5 text-slate-400 absolute left-3 top-3" />
+                          <input 
+                            type="text"
+                            placeholder="Type product name (Yamuna, Fortune, Rin, Classic...)"
+                            value={posSearch}
+                            onChange={(e) => setPosSearch(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-emerald-600 font-medium"
+                            autoFocus
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowCustomItemModal(true)}
+                          className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs px-3.5 py-2.5 rounded-lg shadow transition flex items-center space-x-1 shrink-0 cursor-pointer"
+                          title="Add any loose or uncataloged item manually"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>+ Custom Item</span>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -2507,6 +2560,7 @@ const handleOpenManualBill = () => {
                   {/* Product Cards Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[600px] overflow-y-auto pr-1">
                     {products
+                      .filter(p => posCategory === 'ALL' || p.category === posCategory)
                       .filter(p => !posSearch || p.name.toLowerCase().includes(posSearch.toLowerCase()) || (p.barcode && p.barcode.includes(posSearch)))
                       .map(p => (
                         <div 
@@ -2549,7 +2603,7 @@ const handleOpenManualBill = () => {
 
                 {/* Right Side: Active Cart & Billing Terminal */}
                 <div className="lg:col-span-5">
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col h-full">
+                  <div id="active-sales-cart-card" className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col h-full">
                     <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                       <div className="flex items-center space-x-2">
                         <ShoppingCart className="w-5 h-5 text-emerald-700" />
@@ -2593,7 +2647,18 @@ const handleOpenManualBill = () => {
                           <div key={item.product_id} className="py-2.5 flex items-center justify-between text-xs">
                             <div className="flex-1 pr-2">
                               <div className="font-bold text-slate-800">{item.name}</div>
-                              <div className="text-slate-400">₹{item.selling_price.toFixed(2)} / {item.base_unit} (GST {item.gst_rate}%)</div>
+                              <div className="flex items-center space-x-1.5 mt-0.5">
+                                <span className="text-3xs text-slate-500 font-bold uppercase">Rate ₹</span>
+                                <input
+                                  type="number"
+                                  step="1"
+                                  value={item.selling_price}
+                                  onChange={(e) => updateCartItemPrice(item.product_id, e.target.value)}
+                                  className="w-16 p-0.5 px-1 bg-white border border-slate-300 rounded text-xs font-bold font-mono text-emerald-800"
+                                  title="Click to edit rate directly"
+                                />
+                                <span className="text-3xs text-slate-400">/{item.base_unit}</span>
+                              </div>
                             </div>
                             <div className="flex items-center space-x-2">
                               <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50">
@@ -3190,7 +3255,7 @@ const handleOpenManualBill = () => {
                       onChange={(e) => setInventoryLocationFilter(e.target.value)}
                       className="text-xs border border-slate-300 rounded-lg p-2 bg-slate-50 font-medium"
                     >
-                      <option value="ALL">All 3 Facilities</option>
+                      <option value="ALL">All Store Locations</option>
                       <option value="loc-main">Main Shop (10-12 Racks)</option>
                       <option value="loc-second">Second Shop (Expiry/Buffer)</option>
                       <option value="loc-godown">Back Godown (Bulk Cartons)</option>
@@ -3238,6 +3303,119 @@ const handleOpenManualBill = () => {
                         </div>
                       </div>
                     ))}
+
+                {/* Master Product Catalog: Purchasing vs Sales Inventory */}
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm mt-6">
+                  <div className="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-sm">Product Inventory Catalog & Sales Readiness</h4>
+                      <p className="text-2xs text-slate-500">Separating priced sales inventory from inward purchase stock (unpriced items remain undefined)</p>
+                    </div>
+
+                    {/* Filter Tabs */}
+                    <div className="flex items-center space-x-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setInventoryFilter('ALL')}
+                        className={`px-3 py-1 rounded-lg font-bold transition ${inventoryFilter === 'ALL' ? 'bg-white text-slate-900 shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                      >
+                        All Catalog ({products.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInventoryFilter('PRICED')}
+                        className={`px-3 py-1 rounded-lg font-bold transition ${inventoryFilter === 'PRICED' ? 'bg-emerald-700 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                      >
+                        Ready for Sale ({products.filter(p => (Number(p.selling_price) > 0 || Number(p.wholesale_price) > 0)).length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInventoryFilter('UNPRICED')}
+                        className={`px-3 py-1 rounded-lg font-bold transition ${inventoryFilter === 'UNPRICED' ? 'bg-amber-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                      >
+                        Rate Pending ({products.filter(p => (!p.selling_price || Number(p.selling_price) === 0) && (!p.wholesale_price || Number(p.wholesale_price) === 0)).length})
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto max-h-[500px]">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-100 text-slate-600 uppercase font-semibold sticky top-0 z-10">
+                        <tr>
+                          <th className="py-2.5 px-3">Item / Product Name</th>
+                          <th className="py-2.5 px-3">Category</th>
+                          <th className="py-2.5 px-3">Wholesale Rate</th>
+                          <th className="py-2.5 px-3">Retail MRP</th>
+                          <th className="py-2.5 px-3">Stock (Shop / Godown)</th>
+                          <th className="py-2.5 px-3">Sales Status</th>
+                          <th className="py-2.5 px-3">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {products
+                          .filter(p => {
+                            const isPriced = (Number(p.selling_price) > 0 || Number(p.wholesale_price) > 0);
+                            if (inventoryFilter === 'PRICED') return isPriced;
+                            if (inventoryFilter === 'UNPRICED') return !isPriced;
+                            return true;
+                          })
+                          .map(p => {
+                            const isPriced = (Number(p.selling_price) > 0 || Number(p.wholesale_price) > 0);
+                            return (
+                              <tr key={p.id} className="hover:bg-slate-50 transition">
+                                <td className="py-2.5 px-3 font-semibold text-slate-900">
+                                  {p.name}
+                                  {p.barcode && <span className="block text-3xs font-mono text-slate-400">Barcode: {p.barcode}</span>}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono text-3xs">
+                                    {p.category}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 font-mono font-bold text-blue-700">
+                                  {Number(p.wholesale_price || p.selling_price) > 0 ? `₹${Number(p.wholesale_price || p.selling_price).toFixed(2)}` : <span className="text-amber-600 italic text-3xs">Rate Pending</span>}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono text-slate-600">
+                                  {Number(p.mrp || p.selling_price) > 0 ? `₹${Number(p.mrp || p.selling_price).toFixed(2)}` : <span className="text-slate-400 italic text-3xs">-</span>}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <span className="font-bold text-emerald-800">{p.main_shop_stock || 0} Shop</span>
+                                  <span className="text-slate-400 ml-1">({p.godown_stock || 0} Godown)</span>
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  {isPriced ? (
+                                    <span className="bg-emerald-100 text-emerald-800 text-3xs font-bold px-2 py-0.5 rounded-full">
+                                      ✓ Ready for POS
+                                    </span>
+                                  ) : (
+                                    <span className="bg-amber-100 text-amber-800 text-3xs font-bold px-2 py-0.5 rounded-full">
+                                      ⚠ Rate Pending (Undefined)
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newRate = prompt(`Set wholesale selling rate for ${p.name} (₹):`, p.wholesale_price || p.selling_price || '100');
+                                      if (newRate !== null) {
+                                        const r = Number(newRate) || 0;
+                                        setProducts(products.map(prod => prod.id === p.id ? { ...prod, wholesale_price: r, selling_price: r } : prod));
+                                      }
+                                    }}
+                                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-2.5 py-1 rounded text-2xs cursor-pointer border border-slate-300"
+                                  >
+                                    Edit Rate
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
                 </div>
               </div>
             )}
@@ -3557,8 +3735,13 @@ const handleOpenManualBill = () => {
               <div className="space-y-5">
                 <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 shadow-sm">
                   <div>
-                    <h3 className="font-bold text-slate-800 text-base">Standard Operating Procedures & Daily Task Log</h3>
-                    <p className="text-xs text-slate-500">Accountability for billing, shelf stocking, expiry inspection, and closing SOPs</p>
+                    <div className="flex items-center space-x-2">
+                      <h3 className="font-bold text-slate-900 text-base">Dukaan Standard Operating Procedures (Staff SOPs)</h3>
+                      <span className="text-3xs bg-blue-100 text-blue-900 font-bold px-2 py-0.5 rounded-full uppercase">Daily Operations Checklist</span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      SOPs dukaan ki daily opening, closing, cash drawer tally, front shelf restocking, aur expired batch return ki nirdharit guidelines hain.
+                    </p>
                   </div>
                   <span className="text-xs font-semibold bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full">
                     Current Role: {userRole}
@@ -4167,6 +4350,170 @@ const handleOpenManualBill = () => {
           </div>
         </div>
       )}
+    
+      {/* ========================================================= */}
+      {/* MODAL: QUICK CUSTOM / LOOSE ITEM MODAL FOR FAST COUNTER   */}
+      {/* ========================================================= */}
+      {showCustomItemModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <h4 className="font-bold text-slate-900 text-sm">Add Custom Item to Bill</h4>
+              <button 
+                type="button"
+                onClick={() => setShowCustomItemModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddCustomPosItem} className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Item / Description</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Khula Chawal 5kg, Maachis, etc."
+                  value={customItem.name}
+                  onChange={(e) => setCustomItem({ ...customItem, name: e.target.value })}
+                  className="w-full p-2 border border-slate-300 rounded-lg text-xs font-semibold"
+                  autoFocus
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Selling Rate (₹)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    placeholder="Rate"
+                    value={customItem.price}
+                    onChange={(e) => setCustomItem({ ...customItem, price: e.target.value })}
+                    className="w-full p-2 border border-slate-300 rounded-lg text-xs font-bold font-mono"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Quantity</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="1"
+                    value={customItem.quantity}
+                    onChange={(e) => setCustomItem({ ...customItem, quantity: Number(e.target.value) || 1 })}
+                    className="w-full p-2 border border-slate-300 rounded-lg text-xs font-bold text-center font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex space-x-2 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl shadow transition"
+                >
+                  Add to Current Bill
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCustomItemModal(false)}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-4 py-2.5 rounded-xl"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: RECEIPT & DIRECT WHATSAPP BILL SHARE MODAL          */}
+      {/* ========================================================= */}
+      {completedSaleBill && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <div className="text-center pb-2 border-b border-slate-100">
+              <span className="text-2xs font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                Sale Recorded Successfully
+              </span>
+              <h3 className="font-black text-xl text-slate-900 mt-1">SHREE HARI OM TRADERS</h3>
+              <p className="text-2xs text-slate-500">Counter Cash Memo / Sales Slip • Bill #{completedSaleBill.bill_number}</p>
+            </div>
+
+            {/* Item summary */}
+            <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden text-xs">
+              {completedSaleBill.items.map((it, idx) => (
+                <div key={idx} className="p-2.5 flex justify-between items-center bg-white hover:bg-slate-50">
+                  <div>
+                    <span className="font-bold text-slate-800 block">{it.name}</span>
+                    <span className="text-3xs text-slate-400">{it.quantity} {it.base_unit || ''} @ ₹{it.selling_price}</span>
+                  </div>
+                  <span className="font-bold text-slate-800 font-mono">₹{(it.quantity * it.selling_price).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-200 flex justify-between items-center">
+              <div>
+                <span className="text-2xs text-emerald-800 font-bold block">Payment Mode: {completedSaleBill.payment_mode}</span>
+                <span className="text-2xs text-slate-500">Customer: {completedSaleBill.customer_name || 'Counter Sale'}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-3xs text-slate-500 uppercase font-bold block">Grand Total</span>
+                <span className="text-xl font-black text-emerald-900 font-mono">₹{Number(completedSaleBill.grand_total).toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* WhatsApp Phone Entry & Share */}
+            <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/30 space-y-2">
+              <label className="text-2xs font-bold text-emerald-900 block">
+                📲 Send Bill on WhatsApp (Optional)
+              </label>
+              <div className="flex space-x-2">
+                <input
+                  type="tel"
+                  placeholder="Enter 10-digit Mobile No."
+                  defaultValue={completedSaleBill.customer_phone || ''}
+                  id="whatsapp-phone-input"
+                  className="flex-1 p-2 bg-white border border-emerald-300 rounded-lg text-xs font-mono font-bold"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ph = document.getElementById('whatsapp-phone-input')?.value;
+                    sendBillWhatsApp({ ...completedSaleBill, customer_phone: ph });
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center space-x-1 shadow transition cursor-pointer"
+                >
+                  <span>Send</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex space-x-2 pt-1">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center space-x-1 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCompletedSaleBill(null)}
+                className="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl text-xs shadow transition cursor-pointer"
+              >
+                Done / Next Customer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
